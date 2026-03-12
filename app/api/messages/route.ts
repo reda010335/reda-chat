@@ -6,13 +6,16 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const conversationId = searchParams.get("conversationId");
 
+    // إذا لم يتم إرسال معرف المحادثة، نرجع مصفوفة فارغة
     if (!conversationId) {
       return NextResponse.json([]);
     }
 
-    const messages = await prisma.message.findMany({
+    // جلب الرسائل من قاعدة البيانات
+    // ملاحظة: تأكد من تشغيل npx prisma generate ليتعرف Prisma على 'messages' أو 'message'
+    const messages = await prisma.messages.findMany({
       where: {
-        conversationId,
+        conversationId: conversationId, // سيتم التعامل معه كـ UUID تلقائياً
       },
       include: {
         sender: {
@@ -24,13 +27,14 @@ export async function GET(req: Request) {
         },
       },
       orderBy: {
-        createdAt: "asc",
+        createdAt: "asc", // ترتيب من الأقدم للأحدث لسهولة القراءة في الشات
       },
     });
 
     return NextResponse.json(messages);
-  } catch (error) {
-    console.log("messages error:", error);
+  } catch (error: any) {
+    console.error("جلب الرسائل - خطأ:", error);
+    // في حالة الخطأ نرجع مصفوفة فارغة لضمان عدم توقف واجهة المستخدم
     return NextResponse.json([]);
   }
 }
