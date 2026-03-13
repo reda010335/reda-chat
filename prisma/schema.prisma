@@ -1,54 +1,33 @@
 generator client {
-  provider        = "prisma-client-js"
-  // السطر ده ضروري عشان يسمح لـ Prisma بالتعامل مع كذا Schema
-  previewFeatures = ["multiSchema"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // بنعرف Prisma إننا هنستخدم الـ public schema وجدول الـ auth بتاع سوبابيز
-  schemas  = ["public", "auth"]
 }
 
 model User {
-  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  username     String         @unique
-  profileName  String
-  createdAt    DateTime       @default(now())
-  
-  sentMessages   Messages[]
-  conversations1 Conversation[] @relation("User1")
-  conversations2 Conversation[] @relation("User2")
+  id          String    @id @default(uuid())
+  username    String    @unique
+  password    String
+  profileName String?
+  createdAt   DateTime  @default(now())
 
-  @@map("User")
-  @@schema("public") // تحديد إن الجدول ده في الـ public schema
+  // العلاقات
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 }
 
-model Conversation {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user1Id   String   @db.Uuid
-  user2Id   String   @db.Uuid
-  createdAt DateTime @default(now())
-
-  user1     User     @relation("User1", fields: [user1Id], references: [id])
-  user2     User     @relation("User2", fields: [user2Id], references: [id])
+model Message {
+  id         String   @id @default(uuid())
+  content    String
+  createdAt  DateTime @default(now())
   
-  messages  Messages[]
+  senderId   String
+  receiverId String
 
-  @@schema("public")
-}
-
-model Messages {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  content        String       
-  createdAt      DateTime     @default(now())
-  senderId       String       @db.Uuid
-  conversationId String       @db.Uuid
-
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User         @relation(fields: [senderId], references: [id])
-
-  @@map("Messages")
-  @@schema("public")
+  // ربط العلاقات بموديل User الخاص بك فقط
+  sender   User @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
 }
