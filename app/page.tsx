@@ -22,7 +22,7 @@ type Post = {
 export default function Home() {
   const router = useRouter();
   
-  // إعداد اتصال Supabase بالطريقة الجديدة (SSR)
+  // إعداد اتصال Supabase
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -36,13 +36,12 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // بيانات تجريبية (سيتم جلبها لاحقاً من الداتابيز)
-  const [stories] = useState([{ id: 1, name: "أحمد" }, { id: 2, name: "سارة" }]);
+  // بيانات تجريبية
   const [posts] = useState<Post[]>([
     { id: 1, author: "Ahmed Ali", time: "منذ 5 دقائق", text: "أول منشور في REDA CHAT 🔥" }
   ]);
 
-  // التحقق من حالة المستخدم عند تشغيل التطبيق
+  // التحقق من حالة المستخدم
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -58,6 +57,7 @@ export default function Home() {
     checkUser();
   }, [supabase]);
 
+  // دالة التسجيل
   const handleRegister = async () => {
     if (!username || !password || !profileName) {
       setMessage("من فضلك املأ كل البيانات");
@@ -67,21 +67,22 @@ export default function Home() {
       setLoading(true);
       setMessage("");
 
-      // 1. إنشاء الحساب في Auth
-      const email = `${username.trim().toLowerCase()}@redachat.com`;
+      // تحويل اليوزر نيم لإيميل وهمي عشان سوبابيز يقبله
+      const fakeEmail = `${username.trim().toLowerCase()}@redachat.com`;
+      
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
+        email: fakeEmail,
+        password: password,
       });
 
       if (authError) throw authError;
 
       if (authData.user) {
-        // 2. ربط بيانات البروفايل بالـ UUID في جدول User
+        // حفظ بيانات البروفايل في جدول User
         const { error: dbError } = await supabase.from("User").insert([
           {
             id: authData.user.id,
-            username: username,
+            username: username.trim().toLowerCase(),
             profileName: profileName,
           },
         ]);
@@ -97,6 +98,7 @@ export default function Home() {
     }
   };
 
+  // دالة الدخول
   const handleLogin = async () => {
     if (!username || !password) {
       setMessage("اكتب اسم المستخدم وكلمة المرور");
@@ -106,10 +108,10 @@ export default function Home() {
       setLoading(true);
       setMessage("");
 
-      const email = `${username.trim().toLowerCase()}@redachat.com`;
+      const fakeEmail = `${username.trim().toLowerCase()}@redachat.com`;
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: fakeEmail,
+        password: password,
       });
 
       if (authError) throw authError;
@@ -137,7 +139,7 @@ export default function Home() {
     setMode("login");
   };
 
-  // واجهة المستخدم بعد تسجيل الدخول
+  // واجهة المستخدم (بعد الدخول)
   if (currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 pb-24 text-right" dir="rtl">
@@ -161,9 +163,16 @@ export default function Home() {
             </div>
           </section>
 
-          {/* المنشورات والستوري تظهر هنا */}
-          <div className="p-4 text-center text-slate-400">
-             مرحباً بك في واجهتك الجديدة المتصلة بـ Supabase 🚀
+          <div className="p-4 space-y-4">
+            {posts.map(post => (
+              <div key={post.id} className="p-4 border rounded-2xl bg-white shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-bold text-emerald-600">{post.author}</span>
+                  <span className="text-xs text-slate-400">{post.time}</span>
+                </div>
+                <p className="text-slate-700">{post.text}</p>
+              </div>
+            ))}
           </div>
           
           <nav className="fixed bottom-0 left-1/2 z-30 grid w-full max-w-md -translate-x-1/2 grid-cols-4 border-t bg-white py-3 shadow-2xl">
@@ -177,7 +186,7 @@ export default function Home() {
     );
   }
 
-  // واجهة تسجيل الدخول
+  // واجهة تسجيل الدخول (قبل الدخول)
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6" dir="rtl">
       <div className="w-full max-w-md rounded-[32px] bg-white p-8 shadow-2xl border border-slate-200">
@@ -193,14 +202,35 @@ export default function Home() {
 
         <div className="space-y-4">
           {mode === "register" && (
-            <input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="الاسم الظاهر (مثلاً: رضا علي)" className="w-full rounded-2xl border p-3 text-right outline-none focus:border-emerald-500 transition-all" />
+            <input 
+              value={profileName} 
+              onChange={(e) => setProfileName(e.target.value)} 
+              placeholder="الاسم الظاهر (مثل: رضا علي)" 
+              className="w-full rounded-2xl border p-3 text-right outline-none focus:border-emerald-500 transition-all" 
+            />
           )}
-          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="اسم المستخدم" className="w-full rounded-2xl border p-3 text-right outline-none focus:border-emerald-500 transition-all" />
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full rounded-2xl border p-3 text-right outline-none focus:border-emerald-500 transition-all" />
+          <input 
+            type="text" 
+            value={username} 
+            onChange={(e) => setUsername(e.target.value)} 
+            placeholder="اسم المستخدم" 
+            className="w-full rounded-2xl border p-3 text-right outline-none focus:border-emerald-500 transition-all" 
+          />
+          <input 
+            type="password" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)} 
+            placeholder="كلمة المرور" 
+            className="w-full rounded-2xl border p-3 text-right outline-none focus:border-emerald-500 transition-all" 
+          />
           
           {message && <div className="p-3 bg-red-50 text-red-500 text-xs text-center font-bold rounded-xl border border-red-100">{message}</div>}
           
-          <button onClick={mode === "login" ? handleLogin : handleRegister} disabled={loading} className="w-full rounded-2xl bg-emerald-500 py-4 text-white font-bold shadow-lg hover:bg-emerald-600 disabled:opacity-50 transition-all">
+          <button 
+            onClick={mode === "login" ? handleLogin : handleRegister} 
+            disabled={loading} 
+            className="w-full rounded-2xl bg-emerald-500 py-4 text-white font-bold shadow-lg hover:bg-emerald-600 disabled:opacity-50 transition-all"
+          >
             {loading ? "جاري التحميل..." : (mode === "login" ? "دخول" : "إنشاء حساب")}
           </button>
         </div>
