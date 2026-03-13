@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "next lint"
   },
@@ -14,11 +14,12 @@
     "@supabase/supabase-js": "latest",
     "bcryptjs": "^3.0.3",
     "lucide-react": "latest",
-    "next": "15.0.3",
+    "next": "^16.1.6",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
