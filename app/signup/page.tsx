@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
 export default function SignUpPage() {
@@ -19,14 +19,25 @@ export default function SignUpPage() {
     country: ""
   });
 
+  // 1. لو اليوزر مسجل دخول أصلاً، ابعته للرئيسية فوراً بدل ما يفضل واقف هنا
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) window.location.replace("/"); 
+    };
+    checkUser();
+  }, [supabase]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
 
     const fakeEmail = `${form.username.trim().toLowerCase()}@redachat.com`;
 
     try {
       if (mode === "register") {
+        // إنشاء الحساب
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: fakeEmail,
           password: form.password,
@@ -35,6 +46,7 @@ export default function SignUpPage() {
         if (authError) throw authError;
 
         if (authData.user) {
+          // حفظ البيانات في جدول User
           const { error: dbError } = await supabase.from("User").upsert([{
             id: authData.user.id,
             profileName: form.profileName,
@@ -45,19 +57,22 @@ export default function SignUpPage() {
           }]);
 
           if (dbError) throw dbError;
-
+          
+          // تسجيل الدخول التلقائي
           await supabase.auth.signInWithPassword({ email: fakeEmail, password: form.password });
-          window.location.href = "/"; 
         }
       } else {
+        // تسجيل الدخول
         const { error: loginError } = await supabase.auth.signInWithPassword({
           email: fakeEmail,
           password: form.password,
         });
-
         if (loginError) throw loginError;
-        window.location.href = "/"; 
       }
+
+      // 2. التحويل النهائي باستخدام replace لضمان عدم الرجوع للخلف
+      window.location.replace("/");
+
     } catch (err: any) {
       alert("خطأ: " + err.message);
     } finally {
@@ -66,7 +81,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4" dir="rtl">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4" dir="rtl">
       <div className="w-full max-w-md bg-white rounded-[40px] p-8 shadow-2xl border border-white text-center">
         <h1 className="text-4xl font-black text-emerald-600 mb-8 italic tracking-tighter uppercase">REDA CHAT</h1>
         
@@ -78,7 +93,7 @@ export default function SignUpPage() {
         <form onSubmit={handleAuth} className="space-y-3">
           {mode === "register" && (
             <>
-              <input placeholder="الاسم اللي هيظهر للناس" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, profileName: e.target.value})} required />
+              <input placeholder="الاسم المستعار" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, profileName: e.target.value})} required />
               <div className="flex gap-2">
                 <input type="number" placeholder="العمر" className="w-1/2 p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, age: e.target.value})} />
                 <select className="w-1/2 p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300 text-slate-500" onChange={e => setForm({...form, gender: e.target.value})}>
@@ -93,8 +108,10 @@ export default function SignUpPage() {
           <input type="text" placeholder="اسم المستخدم" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, username: e.target.value})} required />
           <input type="password" placeholder="كلمة المرور" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, password: e.target.value})} required />
           
-          <button type="submit" disabled={loading} className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg mt-4 active:scale-95">
-            {loading ? "لحظة..." : (mode === "register" ? "إنشاء حساب" : "تسجيل دخول")}
+          <button type="submit" disabled={loading} className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg mt-4 active:scale-95 flex justify-center items-center gap-2">
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (mode === "register" ? "إنشاء حساب" : "تسجيل دخول")}
           </button>
         </form>
       </div>
