@@ -6,121 +6,83 @@ import { useRouter } from "next/navigation";
 export default function SignUpPage() {
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("register");
 
-  // حالات البيانات
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState({
     email: "",
     password: "",
     profileName: "",
     username: "",
     age: "",
     gender: "ذكر",
-    country: "",
-    image: "" // رابط الصورة (اختياري)
+    country: ""
   });
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // 1. إنشاء الحساب في Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: formData.email,
-      password: formData.password,
-    });
+    setLoading(true);
 
-    if (authError) return alert("خطأ في التسجيل: " + authError.message);
+    if (mode === "register") {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+      });
 
-    if (authData.user) {
-      // 2. حفظ البيانات الإضافية في جدول User
-      const { error: dbError } = await supabase.from("User").insert([
-        {
+      if (authError) { alert(authError.message); setLoading(false); return; }
+
+      if (authData.user) {
+        await supabase.from("User").upsert([{
           id: authData.user.id,
-          profileName: formData.profileName,
-          username: formData.username,
-          age: formData.age ? parseInt(formData.age) : null,
-          gender: formData.gender,
-          country: formData.country,
-          image: formData.image || null // لو مفيش صورة هتنزل null
-        }
-      ]);
-
-      if (dbError) {
-        alert("حدث خطأ أثناء حفظ البيانات الشخصية");
-      } else {
-        router.push("/chat"); // التوجه للدردشة فوراً
+          profileName: form.profileName,
+          username: form.username,
+          age: form.age ? parseInt(form.age) : null,
+          gender: form.gender,
+          country: form.country
+        }]);
+        router.push("/"); 
       }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
+      if (error) alert(error.message);
+      else router.push("/");
     }
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4" dir="rtl">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-[35px] shadow-2xl p-8 border border-slate-100 dark:border-slate-800">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-emerald-600">انضم إلينا</h1>
-          <p className="text-slate-400 text-sm mt-2">أنشئ حسابك وابدأ الدردشة الآن</p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4" dir="rtl">
+      <div className="w-full max-w-md bg-white rounded-[40px] p-8 shadow-2xl border border-white text-center">
+        <h1 className="text-4xl font-black text-emerald-600 mb-8 italic tracking-tighter text-center">REDA CHAT</h1>
+        
+        <div className="flex bg-slate-100 rounded-2xl p-1 mb-6">
+          <button onClick={() => setMode("login")} className={`w-1/2 py-3 rounded-xl font-bold transition-all ${mode === "login" ? "bg-white shadow text-emerald-600" : "text-slate-400"}`}>دخول</button>
+          <button onClick={() => setMode("register")} className={`w-1/2 py-3 rounded-xl font-bold transition-all ${mode === "register" ? "bg-white shadow text-emerald-600" : "text-slate-400"}`}>جديد</button>
         </div>
 
-        <form onSubmit={handleSignUp} className="space-y-4">
-          <input 
-            type="text" 
-            placeholder="الاسم اللي هيظهر للناس" 
-            className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 ring-emerald-500 dark:text-white"
-            onChange={(e) => setFormData({...formData, profileName: e.target.value})}
-            required 
-          />
+        <form onSubmit={handleAuth} className="space-y-3">
+          {mode === "register" && (
+            <>
+              <input placeholder="الاسم الكامل" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, profileName: e.target.value})} required />
+              <input placeholder="اسم المستخدم" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, username: e.target.value})} required />
+              <div className="flex gap-2">
+                <input type="number" placeholder="العمر" className="w-1/2 p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, age: e.target.value})} />
+                <select className="w-1/2 p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300 text-slate-500" onChange={e => setForm({...form, gender: e.target.value})}>
+                  <option value="ذكر">ذكر</option>
+                  <option value="أنثى">أنثى</option>
+                </select>
+              </div>
+              <input placeholder="البلد" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, country: e.target.value})} />
+            </>
+          )}
+          <input type="email" placeholder="البريد الإلكتروني" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, email: e.target.value})} required />
+          <input type="password" placeholder="كلمة المرور" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-300" onChange={e => setForm({...form, password: e.target.value})} required />
           
-          <input 
-            type="text" 
-            placeholder="اسم المستخدم (username@)" 
-            className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 ring-emerald-500 dark:text-white"
-            onChange={(e) => setFormData({...formData, username: e.target.value})}
-            required 
-          />
-
-          <input 
-            type="email" 
-            placeholder="البريد الإلكتروني" 
-            className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 ring-emerald-500 dark:text-white"
-            onChange={(e) => setFormData({...formData, email: e.target.value})}
-            required 
-          />
-
-          <input 
-            type="password" 
-            placeholder="كلمة المرور" 
-            className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 ring-emerald-500 dark:text-white"
-            onChange={(e) => setFormData({...formData, password: e.target.value})}
-            required 
-          />
-
-          <div className="flex gap-3">
-            <input 
-              type="number" 
-              placeholder="العمر" 
-              className="w-1/2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 ring-emerald-500 dark:text-white"
-              onChange={(e) => setFormData({...formData, age: e.target.value})}
-            />
-            <select 
-              className="w-1/2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 ring-emerald-500 dark:text-white"
-              onChange={(e) => setFormData({...formData, gender: e.target.value})}
-            >
-              <option value="ذكر">ذكر</option>
-              <option value="أنثى">أنثى</option>
-            </select>
-          </div>
-
-          <input 
-            type="text" 
-            placeholder="رابط الصورة الشخصية (اختياري)" 
-            className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 ring-emerald-500 dark:text-white"
-            onChange={(e) => setFormData({...formData, image: e.target.value})}
-          />
-
-          <button 
-            type="submit" 
-            className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-lg shadow-lg shadow-emerald-500/30 hover:bg-emerald-700 transition-all active:scale-95 mt-4"
-          >
-            إنشاء الحساب
+          <button type="submit" className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg mt-4">
+            {loading ? "جاري العمل..." : (mode === "register" ? "إنشاء حساب" : "تسجيل دخول")}
           </button>
         </form>
       </div>
