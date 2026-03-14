@@ -10,7 +10,7 @@ export default function ChatPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   const router = useRouter();
-  const { id: receiverId } = useParams(); // ID الشخص اللي بتكلمه
+  const { id: receiverId } = useParams();
   
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -20,24 +20,22 @@ export default function ChatPage() {
 
   useEffect(() => {
     const initChat = async () => {
-      // 1. نجيب بياناتي
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setMyUser(user);
 
-      // 2. نجيب بيانات الشخص اللي بكلمه (عشان الاسم والصورة يظهروا فوق)
       const { data: receiverData } = await supabase
         .from("User")
         .select("*")
         .eq("id", receiverId)
-        .single();
+        .maybeSingle();
+      
       setReceiver(receiverData);
 
-      // 3. نجيب الرسائل القديمة بيننا
       if (user) {
         const { data: oldMessages } = await supabase
           .from("Message")
           .select("*")
-          .or(`and(senderId.eq.${user.id},receiverId.eq.${receiverId}),and(senderId.eq.${receiverId},receiverId.eq.${user.id})`)
+          .or(`and(sender_id.eq.${user.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${user.id})`)
           .order("createdAt", { ascending: true });
         setMessages(oldMessages || []);
       }
@@ -45,13 +43,12 @@ export default function ChatPage() {
 
     initChat();
 
-    // 4. ميزة الـ Real-time (الرسائل تظهر فوراً أول ما توصل)
     const channel = supabase
-      .channel("chat_channel")
+      .channel(`chat_${receiverId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "Message" }, (payload) => {
         const msg = payload.new;
-        if ((msg.senderId === myUser?.id && msg.receiverId === receiverId) || 
-            (msg.senderId === receiverId && msg.receiverId === myUser?.id)) {
+        if ((msg.sender_id === myUser?.id && msg.receiver_id === receiverId) || 
+            (msg.sender_id === receiverId && msg.receiver_id === myUser?.id)) {
           setMessages((prev) => [...prev, msg]);
         }
       })
@@ -60,7 +57,6 @@ export default function ChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [receiverId, myUser?.id]);
 
-  // سكرول تلقائي لآخر رسالة
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -71,58 +67,68 @@ export default function ChatPage() {
     setNewMessage("");
 
     const { error } = await supabase.from("Message").insert([
-      { content: msgContent, senderId: myUser.id, receiverId: receiverId }
+      { content: msgContent, sender_id: myUser.id, receiver_id: receiverId }
     ]);
 
-    if (error) alert("فشل الإرسال: تأكد من جدول Message في سوبابيز");
+    if (error) alert("فشل الإرسال: " + error.message);
   };
 
-  if (!receiver) return <div className="min-h-screen flex items-center justify-center font-bold text-emerald-600 animate-pulse">جاري تحميل الدردشة...</div>;
-
   return (
-    <div className="flex flex-col h-screen bg-slate-50" dir="rtl">
-      {/* الهيدر - فيه الاسم وزر الرجوع */}
-      <header className="bg-white p-4 flex items-center gap-4 border-b shadow-sm sticky top-0 z-10">
-        <button onClick={() => router.back()} className="text-2xl text-slate-400 p-2 hover:bg-slate-100 rounded-full transition-all">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 transition-colors overflow-hidden" dir="rtl">
+      
+      {/* هيدر الدردشة - ثابت ومنظم */}
+      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-3 px-4 flex items-center justify-between border-b dark:border-slate-800 shadow-sm z-50">
+        <div className="flex items-center gap-3 cursor-pointer active:opacity-70 transition-all" onClick={() => router.push(`/profile/${receiverId}`)}>
+          <div className="relative">
+            <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold border-2 border-white dark:border-slate-700 shadow-md overflow-hidden">
+              {receiver?.image ? <img src={receiver.image} className="w-full h-full object-cover" /> : <span>{receiver?.profileName?.[0] || "?"}</span>}
+            </div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+          </div>
+          <div className="flex flex-col">
+            <h2 className="font-black text-slate-800 dark:text-white text-[14px] leading-tight tracking-tight">
+              {receiver?.profileName || "جاري التحميل..."}
+            </h2>
+            <p className="text-[10px] text-emerald-500 font-bold">عرض الصفحة الشخصية</p>
+          </div>
+        </div>
+
+        <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all">
+           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
         </button>
-        <div className="w-10 h-10 rounded-full bg-emerald-500 overflow-hidden border border-emerald-100 shadow-sm">
-          {receiver.image ? <img src={receiver.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white font-bold">{receiver.profileName[0]}</div>}
-        </div>
-        <div>
-          <h2 className="font-black text-slate-800 text-sm leading-tight">{receiver.profileName}</h2>
-          <p className="text-[10px] text-emerald-500 font-bold">متصل الآن</p>
-        </div>
       </header>
 
-      {/* منطقة الرسائل */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.senderId === myUser?.id ? "justify-start" : "justify-end"}`}>
-            <div className={`max-w-[75%] p-3 px-4 rounded-[22px] text-sm font-medium shadow-sm ${
-              msg.senderId === myUser?.id 
-                ? "bg-emerald-600 text-white rounded-br-none" 
-                : "bg-white text-slate-700 rounded-bl-none border border-slate-100"
-            }`}>
-              {msg.content}
+      {/* منطقة الرسائل - سكرول داخلي */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-10">
+        {messages.map((msg, idx) => {
+          const isMine = msg.sender_id === myUser?.id;
+          return (
+            <div key={idx} className={`flex ${isMine ? "justify-start" : "justify-end"} animate-in fade-in slide-in-from-bottom-2`}>
+              <div className={`max-w-[80%] p-3 px-4 rounded-[22px] text-[15px] shadow-sm leading-relaxed ${
+                isMine 
+                  ? "bg-emerald-600 text-white rounded-br-none" 
+                  : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-none border border-slate-100 dark:border-slate-800"
+              }`}>
+                {msg.content}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={scrollRef} />
       </div>
 
-      {/* منطقة الكتابة */}
-      <div className="p-4 bg-white border-t sticky bottom-0">
-        <div className="flex gap-2 items-center bg-slate-50 p-2 rounded-3xl border border-slate-100">
+      {/* منطقة الكتابة - ذكية مع الكيبورد */}
+      <div className="p-3 bg-white dark:bg-slate-900 border-t dark:border-slate-800">
+        <div className="flex gap-2 items-center bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-[28px] border border-transparent focus-within:border-emerald-500/50 transition-all">
           <input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder="اكتب رسالتك هنا..."
-            className="flex-1 bg-transparent p-2 px-4 outline-none text-sm"
+            placeholder="اكتب رسالة..."
+            className="flex-1 bg-transparent p-2 px-4 outline-none text-[15px] text-slate-800 dark:text-white"
           />
-          <button onClick={sendMessage} className="bg-emerald-600 text-white p-3 rounded-full shadow-lg hover:bg-emerald-700 active:scale-90 transition-all">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          <button onClick={sendMessage} className="bg-emerald-600 text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg shadow-emerald-500/20 active:scale-90 transition-all">
+             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
           </button>
         </div>
       </div>
