@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+hereimport { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
@@ -6,16 +6,15 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const conversationId = searchParams.get("conversationId");
 
-    // إذا لم يتم إرسال معرف المحادثة، نرجع مصفوفة فارغة
     if (!conversationId) {
       return NextResponse.json([]);
     }
 
-    // جلب الرسائل من قاعدة البيانات
-    // ملاحظة: تأكد من تشغيل npx prisma generate ليتعرف Prisma على 'messages' أو 'message'
-    const messages = await prisma.messages.findMany({
+    // ملاحظة: لو اسم الجدول عندك في الـ Schema هو Message (بالمفرد) 
+    // غير prisma.messages لـ prisma.message
+    const messages = await prisma.message.findMany({
       where: {
-        conversationId: conversationId, // سيتم التعامل معه كـ UUID تلقائياً
+        conversationId: conversationId,
       },
       include: {
         sender: {
@@ -27,14 +26,16 @@ export async function GET(req: Request) {
         },
       },
       orderBy: {
-        createdAt: "asc", // ترتيب من الأقدم للأحدث لسهولة القراءة في الشات
+        createdAt: "asc",
       },
     });
 
     return NextResponse.json(messages);
   } catch (error: any) {
-    console.error("جلب الرسائل - خطأ:", error);
-    // في حالة الخطأ نرجع مصفوفة فارغة لضمان عدم توقف واجهة المستخدم
+    // عرض الخطأ بالتفصيل في الـ Console عشان تعرف لو المشكلة في اسم الجدول
+    console.error("❌ خطأ في جلب الرسائل:", error.message);
+    
+    // نرجع مصفوفة فارغة عشان الـ Frontend ما يضربش (Crash)
     return NextResponse.json([]);
   }
 }
