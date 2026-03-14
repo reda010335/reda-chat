@@ -1,159 +1,139 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 
-type UserProfile = {
+type Post = {
   id: string;
-  username: string;
-  profileName: string;
+  content: string;
+  createdAt: string;
+  author: { profileName: string; username: string };
+  likes_count: number;
 };
 
 export default function Home() {
-  const router = useRouter();
-  
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [profileName, setProfileName] = useState("");
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [message, setMessage] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [newPost, setNewPost] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // 1. جلب بيانات المستخدم والبوستات
   useEffect(() => {
-    const checkUser = async () => {
+    const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase
-          .from("User")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-        if (profile) setCurrentUser(profile);
+        const { data: profile } = await supabase.from("User").select("*").eq("id", user.id).single();
+        setUser(profile);
       }
+
+      const { data: postsData } = await supabase
+        .from("Post")
+        .select(`*, author:User(profileName, username)`)
+        .order("createdAt", { ascending: false });
+      
+      setPosts(postsData || []);
     };
-    checkUser();
-  }, [supabase]);
+    fetchData();
+  }, []);
 
-  const getFakeEmail = (user: string) => `${user.trim().toLowerCase()}@redachat.com`;
-
-  const handleAuth = async () => {
-    if (!username || !password) {
-      setMessage("اكتب البيانات الأول يا بطل");
-      return;
-    }
+  // 2. وظيفة نشر بوست جديد
+  const handlePost = async () => {
+    if (!newPost.trim()) return;
     setLoading(true);
-    setMessage("");
-    const fakeEmail = getFakeEmail(username);
-
-    try {
-      if (mode === "register") {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: fakeEmail,
-          password: password,
-        });
-        if (authError) throw authError;
-        if (authData.user) {
-          await supabase.from("User").upsert([{
-            id: authData.user.id,
-            username: username.trim().toLowerCase(),
-            profileName: profileName.trim() || username,
-          }]);
-        }
-      }
-
-      const { error: loginError } = await supabase.auth.signInWithPassword({
-        email: fakeEmail,
-        password: password,
-      });
-      if (loginError) throw loginError;
-
-      // الدخول الفوري
-      window.location.replace('/'); 
-    } catch (err: any) {
-      setMessage(err.message === "Invalid login credentials" ? "بيانات الدخول غلط" : err.message);
-    } finally {
-      setLoading(false);
+    const { error } = await supabase.from("Post").insert([
+      { content: newPost, authorId: user.id }
+    ]);
+    
+    if (!error) {
+      setNewPost("");
+      window.location.reload(); // تحديث الصفحة لرؤية البوست الجديد
     }
+    setLoading(false);
   };
 
-  // واجهة الموقع من الداخل (لو مسجل دخول)
-  if (currentUser) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex justify-center" dir="rtl">
-        <div className="w-full max-w-md bg-white min-h-screen shadow-2xl flex flex-col">
-          
-          <header className="p-6 border-b flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-50">
-            <h1 className="text-2xl font-black text-emerald-600 italic">REDA CHAT</h1>
-            <button 
-              onClick={async () => { await supabase.auth.signOut(); window.location.replace('/'); }}
-              className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-red-50 transition-colors"
-            >🚪</button>
-          </header>
+  if (!user) return <div className="text-center p-10 font-bold">جاري التحميل...</div>;
 
-          <main className="flex-1 p-6 space-y-6">
-            <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-[32px] p-8 text-white shadow-xl">
-              <h2 className="text-3xl font-bold mb-2">يا هلا، {currentUser.profileName}!</h2>
-              <p className="opacity-90 text-sm leading-relaxed">
-                دلوقتي أنت متصل بالداتا بيز. جرب تبحث عن أصحابك أو تدخل الدردشات.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => router.push("/search")} className="p-6 bg-white border border-slate-100 rounded-3xl text-right hover:shadow-md transition-all">
-                <span className="text-3xl block mb-3">🔍</span>
-                <span className="font-bold text-slate-800">البحث</span>
-              </button>
-              <button onClick={() => router.push("/chat")} className="p-6 bg-white border border-slate-100 rounded-3xl text-right hover:shadow-md transition-all">
-                <span className="text-3xl block mb-3">💬</span>
-                <span className="font-bold text-slate-800">الدردشات</span>
-              </button>
-            </div>
-          </main>
-
-          <nav className="p-4 bg-white border-t flex justify-around items-center sticky bottom-0">
-            <button className="text-emerald-600 text-2xl">🏠</button>
-            <button onClick={() => router.push("/search")} className="text-slate-300 text-2xl">🔍</button>
-            <button onClick={() => router.push("/chat")} className="text-slate-300 text-2xl">💬</button>
-            <button onClick={() => router.push("/profile")} className="text-slate-300 text-2xl">👤</button>
-          </nav>
-
-        </div>
-      </div>
-    );
-  }
-
-  // واجهة تسجيل الدخول
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6" dir="rtl">
-      <div className="w-full max-w-md rounded-[45px] bg-white p-10 shadow-2xl border border-white">
-        <h1 className="text-4xl font-black text-center text-slate-900 mb-10 italic tracking-tighter">REDA CHAT</h1>
-        
-        <div className="mb-8 flex rounded-2xl bg-slate-100 p-1.5">
-          <button onClick={() => setMode("login")} className={`w-1/2 py-3 rounded-xl font-bold transition-all ${mode === "login" ? "bg-white shadow-sm text-emerald-600" : "text-slate-400"}`}>دخول</button>
-          <button onClick={() => setMode("register")} className={`w-1/2 py-3 rounded-xl font-bold transition-all ${mode === "register" ? "bg-white shadow-sm text-emerald-600" : "text-slate-400"}`}>جديد</button>
+    <div className="min-h-screen bg-slate-100 pb-20" dir="rtl">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-black text-emerald-600 italic">REDA CHAT</h1>
+        <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold">
+          {user.profileName[0]}
+        </div>
+      </header>
+
+      <main className="max-w-md mx-auto p-4 space-y-4">
+        {/* Create Post Card */}
+        <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-200">
+          <div className="flex gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full bg-slate-200 shrink-0" />
+            <textarea
+              value={newPost}
+              onChange={(e) => setNewPost(e.target.value)}
+              placeholder={`بماذا تفكر يا ${user.profileName}؟`}
+              className="w-full bg-slate-50 rounded-2xl p-3 text-sm outline-none resize-none focus:ring-1 ring-emerald-500"
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-between items-center border-t pt-3">
+            <button className="text-slate-500 text-sm flex items-center gap-1">🖼️ صورة</button>
+            <button
+              onClick={handlePost}
+              disabled={loading}
+              className="bg-emerald-500 text-white px-6 py-2 rounded-full font-bold text-sm hover:bg-emerald-600 transition-all disabled:opacity-50"
+            >
+              {loading ? "جاري النشر..." : "نشر"}
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-4">
-          {mode === "register" && (
-            <input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="اسمك الكامل" className="w-full rounded-2xl bg-slate-50 p-4 border-none outline-none focus:ring-2 ring-emerald-500 transition-all" />
-          )}
-          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="اسم المستخدم" className="w-full rounded-2xl bg-slate-50 p-4 border-none outline-none focus:ring-2 ring-emerald-500 transition-all" />
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full rounded-2xl bg-slate-50 p-4 border-none outline-none focus:ring-2 ring-emerald-500 transition-all" />
-          
-          {message && <div className="p-3 rounded-xl bg-red-50 text-red-500 text-xs font-bold text-center">{message}</div>}
-          
-          <button onClick={handleAuth} disabled={loading} className="w-full rounded-2xl bg-emerald-500 py-4 text-white font-black text-lg shadow-xl shadow-emerald-100 hover:bg-emerald-600 active:scale-95 transition-all">
-            {loading ? "لحظة..." : mode === "login" ? "تسجيل الدخول" : "إنشاء حساب مجاني"}
-          </button>
-        </div>
-      </div>
+        {/* Feed - قائمة المنشورات */}
+        {posts.map((post) => (
+          <div key={post.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
+                {post.author?.profileName[0] || "U"}
+              </div>
+              <div>
+                <p className="font-bold text-slate-900 text-sm">{post.author?.profileName}</p>
+                <p className="text-[10px] text-slate-400">@{post.author?.username} • منذ قليل</p>
+              </div>
+            </div>
+            <p className="text-slate-700 text-sm leading-relaxed">{post.content}</p>
+            <div className="flex justify-around border-t pt-3 text-slate-500 text-sm">
+              <button className="flex items-center gap-2 hover:text-emerald-500">👍 إعجاب</button>
+              <button className="flex items-center gap-2 hover:text-emerald-500">💬 تعليق</button>
+              <button className="flex items-center gap-2 hover:text-emerald-500">↗️ مشاركة</button>
+            </div>
+          </div>
+        ))}
+      </main>
+
+      {/* Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 flex justify-around items-center z-50">
+        <button className="flex flex-col items-center text-emerald-600">
+          <span className="text-xl">🏠</span>
+          <span className="text-[10px] font-bold">الرئيسية</span>
+        </button>
+        <button onClick={() => window.location.href='/friends'} className="flex flex-col items-center text-slate-400">
+          <span className="text-xl">👥</span>
+          <span className="text-[10px] font-bold">الأصدقاء</span>
+        </button>
+        <button onClick={() => window.location.href='/chat'} className="flex flex-col items-center text-slate-400">
+          <span className="text-xl">💬</span>
+          <span className="text-[10px] font-bold">الدردشة</span>
+        </button>
+        <button onClick={() => window.location.href='/settings'} className="flex flex-col items-center text-slate-400">
+          <span className="text-xl">⚙️</span>
+          <span className="text-[10px] font-bold">الإعدادات</span>
+        </button>
+      </nav>
     </div>
   );
 }

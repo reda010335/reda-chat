@@ -8,26 +8,92 @@ datasource db {
 }
 
 model User {
-  id          String    @id @default(uuid())
-  username    String    @unique
-  password    String
-  profileName String?
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(cuid())
+  username      String    @unique
+  profileName   String
+  password      String
+  image         String?   @default("https://via.placeholder.com/150")
+  bio           String?
+  createdAt     DateTime  @default(now())
 
   // العلاقات
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  
+  // نظام الأصدقاء
+  sentRequests     FriendRequest[] @relation("sender")
+  receivedRequests  FriendRequest[] @relation("receiver")
+  
+  friends          Friendship[]    @relation("userFriends")
+  friendOf         Friendship[]    @relation("friendOfUser")
+
+  // الدردشة
+  sentMessages     Message[] @relation("sender")
+  receivedMessages  Message[] @relation("receiver")
+}
+
+model Post {
+  id        String    @id @default(cuid())
+  content   String
+  image     String?
+  createdAt DateTime  @default(now())
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  comments  Comment[]
+  likes     Like[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Like {
+  id     String @id @default(cuid())
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+model FriendRequest {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("sender", fields: [senderId], references: [id])
+  receiver   User     @relation("receiver", fields: [receiverId], references: [id])
+}
+
+model Friendship {
+  id        String @id @default(cuid())
+  userId    String
+  friendId  String
+  user      User   @relation("userFriends", fields: [userId], references: [id])
+  friend    User   @relation("friendOfUser", fields: [friendId], references: [id])
+
+  @@unique([userId, friendId])
 }
 
 model Message {
-  id         String   @id @default(uuid())
+  id         String   @id @default(cuid())
   content    String
+  image      String?
   createdAt  DateTime @default(now())
-  
   senderId   String
   receiverId String
 
-  // ربط العلاقات بموديل User الخاص بك فقط
-  sender   User @relation("SentMessages", fields: [senderId], references: [id])
-  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  sender     User     @relation("sender", fields: [senderId], references: [id])
+  receiver   User     @relation("receiver", fields: [receiverId], references: [id])
 }
