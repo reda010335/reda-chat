@@ -1,4 +1,4 @@
-hereimport { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma"; // استخدم النسخة الموحدة من بريزما
 import { createBrowserClient } from "@supabase/ssr"; // أو النوع المناسب حسب مكان الاستخدام
 
