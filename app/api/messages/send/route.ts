@@ -4,22 +4,23 @@ import { prisma } from "@/lib/prisma";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { conversationId, senderId, text } = body;
+    // بناءً على السكيما: محتاجين المرسل والمستقبل والمحتوى
+    const { senderId, receiverId, text } = body;
 
-    // التأكد من وجود البيانات المطلوبة
-    if (!conversationId || !senderId || !text?.trim()) {
+    // التأكد من وجود البيانات المطلوبة حسب السكيما
+    if (!senderId || !receiverId || !text?.trim()) {
       return NextResponse.json(
-        { error: "بيانات الرسالة غير مكتملة" },
+        { error: "بيانات الرسالة غير مكتملة. تأكد من وجود المرسل والمستقبل والنص." },
         { status: 400 }
       );
     }
 
-    // إنشاء الرسالة في جدول Messages (الاسم الجديد بالجمع حسب السكيما)
-    const message = await prisma.messages.create({
+    // الإنشاء في جدول Message (بالمفرد)
+    const newMessage = await prisma.message.create({
       data: {
-        conversationId, // UUID
-        senderId,       // UUID
-        content: text.trim(), // غيرنا text لـ content حسب الـ Schema الأخيرة
+        content: text.trim(),
+        senderId: senderId,   // UUID للمرسل
+        receiverId: receiverId, // UUID للمستقبل
       },
       include: {
         sender: {
@@ -32,13 +33,12 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json(message);
+    return NextResponse.json(newMessage);
   } catch (error: any) {
-    console.error("send route error:", error);
+    console.error("❌ خطأ في إرسال الرسالة:", error.message);
     
-    // رسالة خطأ واضحة في حالة وجود مشكلة في الـ UUID أو العلاقات
     return NextResponse.json(
-      { error: "حدث خطأ أثناء إرسال الرسالة. تأكد من صحة المعرفات (UUID)" },
+      { error: "فشل الإرسال: " + (error.message.includes("foreign key") ? "المستخدم غير موجود" : error.message) },
       { status: 500 }
     );
   }
