@@ -35,7 +35,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   const [posts] = useState<Post[]>([
-    { id: 1, author: "Reda Chat", time: "الآن", text: "أهلاً بك في النسخة الجديدة من REDA CHAT 🚀" }
+    { id: 1, author: "Reda Chat", time: "الآن", text: "أهلاً بك في REDA CHAT 🚀" }
   ]);
 
   useEffect(() => {
@@ -53,9 +53,9 @@ export default function Home() {
     checkUser();
   }, [supabase]);
 
-  // دالة موحدة لإنشاء الإيميل الوهمي من اليوزر نيم (تنظيف البيانات)
   const getFakeEmail = (user: string) => `${user.trim().toLowerCase()}@redachat.com`;
 
+  // --- الدالة المعدلة ---
   const handleRegister = async () => {
     if (!username || !password || !profileName) {
       setMessage("من فضلك املأ كل البيانات");
@@ -73,11 +73,17 @@ export default function Home() {
         password: password,
       });
 
+      // لو اليوزر مسجل بالفعل، هنحاول ندخله علطول بدل ما نطلّع Error
+      if (authError && authError.message.includes("already registered")) {
+        console.log("الحساب موجود، يتم تسجيل الدخول...");
+        return handleLogin(); 
+      }
+
       if (authError) throw authError;
 
       if (authData.user) {
-        // إضافة اليوزر لجدول الـ User في قاعدة البيانات
-        const { error: dbError } = await supabase.from("User").insert([
+        // استخدام upsert لضمان عدم حدوث خطأ لو البيانات موجودة
+        const { error: dbError } = await supabase.from("User").upsert([
           {
             id: authData.user.id,
             username: cleanUsername,
@@ -87,12 +93,11 @@ export default function Home() {
 
         if (dbError) throw dbError;
         
-        setMessage("تم إنشاء الحساب بنجاح! سجل دخولك الآن");
-        setMode("login");
+        setMessage("تم إنشاء الحساب بنجاح! جاري الدخول...");
+        setTimeout(() => handleLogin(), 1000);
       }
     } catch (err: any) {
-      console.error(err);
-      setMessage(err.message.includes("permission denied") ? "خطأ في صلاحيات قاعدة البيانات" : "اسم المستخدم موجود بالفعل أو البيانات خاطئة");
+      setMessage(err.message || "حدث خطأ أثناء التسجيل");
     } finally {
       setLoading(false);
     }
@@ -124,10 +129,9 @@ export default function Home() {
           .single();
 
         if (dbError) {
-           // لو اليوزر موجود في الـ Auth بس مش في جدول الـ User، هنحاول نكريته
-           setCurrentUser({ id: authData.user.id, username: username, profileName: username });
+          setCurrentUser({ id: authData.user.id, username: username, profileName: username });
         } else {
-           setCurrentUser(profile);
+          setCurrentUser(profile);
         }
       }
     } catch (err: any) {
@@ -143,7 +147,7 @@ export default function Home() {
     setMode("login");
   };
 
-  // واجهة المستخدم بعد الدخول
+  // واجهة المستخدم (Header & Posts)
   if (currentUser) {
     return (
       <div className="min-h-screen bg-slate-100 pb-24 text-right" dir="rtl">
@@ -151,11 +155,11 @@ export default function Home() {
           <header className="sticky top-0 z-20 border-b bg-white px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-11 w-11 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-                {currentUser.profileName ? currentUser.profileName.charAt(0) : "U"}
+                {currentUser.profileName.charAt(0)}
               </div>
               <div className="text-right">
                 <h1 className="text-xl font-extrabold text-slate-900 leading-none">REDA CHAT</h1>
-                <p className="text-[10px] text-emerald-600 font-bold mt-1">متصل الآن باسم {currentUser.profileName}</p>
+                <p className="text-[10px] text-emerald-600 font-bold mt-1">متصل الآن</p>
               </div>
             </div>
             <button onClick={handleLogout} className="text-xs text-red-500 font-bold border border-red-100 rounded-lg px-3 py-1.5 hover:bg-red-50 transition-colors">خروج</button>
@@ -163,13 +167,13 @@ export default function Home() {
 
           <section className="p-4 border-b bg-white">
             <div className="flex items-center gap-3">
-               <input placeholder={`بم تفكر يا ${currentUser.profileName}؟`} className="flex-1 rounded-full bg-slate-100 px-4 py-3 outline-none text-right text-sm focus:ring-2 focus:ring-emerald-100" />
+               <input placeholder={`بم تفكر يا ${currentUser.profileName.split(' ')[0]}؟`} className="flex-1 rounded-full bg-slate-100 px-4 py-3 outline-none text-right text-sm focus:ring-2 focus:ring-emerald-100" />
             </div>
           </section>
 
           <div className="p-4 space-y-4">
             {posts.map(post => (
-              <div key={post.id} className="p-4 border border-slate-100 rounded-2xl bg-white shadow-sm">
+              <div key={post.id} className="p-4 border border-slate-100 rounded-2xl bg-white shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-bold text-emerald-600 text-sm">{post.author}</span>
                   <span className="text-[10px] text-slate-400 font-medium">{post.time}</span>
@@ -179,7 +183,7 @@ export default function Home() {
             ))}
           </div>
           
-          <nav className="fixed bottom-0 left-1/2 z-30 grid w-full max-w-md -translate-x-1/2 grid-cols-4 border-t bg-white py-3 shadow-lg">
+          <nav className="fixed bottom-0 left-1/2 z-30 grid w-full max-w-md -translate-x-1/2 grid-cols-4 border-t bg-white/80 backdrop-blur-md py-3 shadow-lg">
             <button className="flex flex-col items-center gap-1 text-emerald-600">
               <span className="text-xl">🏠</span>
               <span className="text-[10px] font-black">الرئيسية</span>
@@ -202,7 +206,7 @@ export default function Home() {
     );
   }
 
-  // واجهة تسجيل الدخول
+  // واجهة الدخول
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 font-sans" dir="rtl">
       <div className="w-full max-w-md rounded-[32px] bg-white p-8 shadow-xl border border-slate-100">
@@ -220,33 +224,16 @@ export default function Home() {
           {mode === "register" && (
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-500 mr-2">الاسم بالكامل</label>
-              <input 
-                value={profileName} 
-                onChange={(e) => setProfileName(e.target.value)} 
-                placeholder="رضا علي" 
-                className="w-full rounded-2xl border border-slate-200 p-4 text-right outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-50" 
-              />
+              <input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="رضا علي" className="w-full rounded-2xl border border-slate-200 p-4 text-right outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-50" />
             </div>
           )}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-500 mr-2">اسم المستخدم (Username)</label>
-            <input 
-              type="text" 
-              value={username} 
-              onChange={(e) => setUsername(e.target.value)} 
-              placeholder="reda123" 
-              className="w-full rounded-2xl border border-slate-200 p-4 text-right outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-50" 
-            />
+            <label className="text-xs font-bold text-slate-500 mr-2">اسم المستخدم</label>
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="reda123" className="w-full rounded-2xl border border-slate-200 p-4 text-right outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-50" />
           </div>
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-500 mr-2">كلمة المرور</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              placeholder="••••••••" 
-              className="w-full rounded-2xl border border-slate-200 p-4 text-right outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-50" 
-            />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-2xl border border-slate-200 p-4 text-right outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-50" />
           </div>
           
           {message && (
@@ -255,15 +242,11 @@ export default function Home() {
             </div>
           )}
           
-          <button 
-            onClick={mode === "login" ? handleLogin : handleRegister} 
-            disabled={loading} 
-            className="w-full rounded-2xl bg-emerald-500 py-4 mt-4 text-white font-bold shadow-lg hover:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 transition-all"
-          >
+          <button onClick={mode === "login" ? handleLogin : handleRegister} disabled={loading} className="w-full rounded-2xl bg-emerald-500 py-4 mt-4 text-white font-bold shadow-lg hover:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 transition-all">
             {loading ? "جاري التحميل..." : (mode === "login" ? "دخول آمن" : "بدء الرحلة الآن")}
           </button>
         </div>
       </div>
     </div>
   );
-            }
+}
