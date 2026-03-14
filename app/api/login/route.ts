@@ -14,7 +14,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. الحل هنا: لازم ننتظر الـ cookies() لأنها أصبحت Promise
     const cookieStore = await cookies();
 
     const supabase = createServerClient(
@@ -26,7 +25,6 @@ export async function POST(req: Request) {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: CookieOptions) {
-            // ملاحظة: الـ Server Actions و الـ Route Handlers بتسمح بالـ set عادي
             cookieStore.set({ name, value, ...options });
           },
           remove(name: string, options: CookieOptions) {
@@ -36,7 +34,6 @@ export async function POST(req: Request) {
       }
     );
 
-    // 2. تسجيل الدخول عبر Supabase Auth
     const email = `${username.trim().toLowerCase()}@redachat.com`;
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -50,16 +47,21 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. جلب بيانات البروفايل من Prisma باستخدام الـ UUID
-    const userProfile = await prisma.user.findUnique({
+    // --- التعديل الجوهري هنا ---
+    // بنحاول نجيب البروفايل، ولو مش موجود (لأنه حساب جديد مثلاً) بنعمله Upsert فوراً
+    let userProfile = await prisma.user.findUnique({
       where: { id: authData.user.id },
     });
 
     if (!userProfile) {
-      return NextResponse.json(
-        { error: "لم يتم العثور على بروفايل مرتبط" },
-        { status: 404 }
-      );
+      // لو الحساب موجود في Supabase بس مش موجود في Prisma، بنضيفه دلوقتي
+      userProfile = await prisma.user.create({
+        data: {
+          id: authData.user.id,
+          username: username.trim().toLowerCase(),
+          profileName: username.trim(), // اسم افتراضي
+        },
+      });
     }
 
     return NextResponse.json({
@@ -70,7 +72,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Login Error:", error);
     return NextResponse.json(
-      { error: "حدث خطأ في السيرفر" },
+      { error: "حدث خطأ في السيرفر: " + error.message },
       { status: 500 }
     );
   }
