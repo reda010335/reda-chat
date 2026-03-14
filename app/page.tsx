@@ -13,17 +13,9 @@ type UserProfile = {
 export default function Home() {
   const router = useRouter();
   
-  // إنشاء السوبابيز مع إعدادات الكوكيز لحل مشكلة 406
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookieOptions: {
-        name: "sb-auth-token",
-        sameSite: "lax",
-        secure: true,
-      }
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -52,143 +44,113 @@ export default function Home() {
   const getFakeEmail = (user: string) => `${user.trim().toLowerCase()}@redachat.com`;
 
   const handleAuth = async () => {
-    if (!username || !password || (mode === "register" && !profileName)) {
-      setMessage("يرجى ملء جميع الحقول");
+    if (!username || !password) {
+      setMessage("اكتب البيانات الأول يا بطل");
       return;
     }
-
     setLoading(true);
     setMessage("");
     const fakeEmail = getFakeEmail(username);
 
     try {
       if (mode === "register") {
-        // 1. إنشاء الحساب في Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: fakeEmail,
           password: password,
-          options: {
-            data: { display_name: profileName }
-          }
         });
-        
         if (authError) throw authError;
-
-        // 2. إضافة البيانات لجدول User
         if (authData.user) {
-          const { error: dbError } = await supabase.from("User").insert([{
+          await supabase.from("User").upsert([{
             id: authData.user.id,
             username: username.trim().toLowerCase(),
-            profileName: profileName.trim(),
+            profileName: profileName.trim() || username,
           }]);
-          if (dbError) throw dbError;
         }
       }
 
-      // 3. تسجيل الدخول
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      const { error: loginError } = await supabase.auth.signInWithPassword({
         email: fakeEmail,
         password: password,
       });
-
       if (loginError) throw loginError;
 
-      // 4. توجيه إجباري للصفحة الرئيسية لتحديث الحالة
-      window.location.href = "/";
-      
+      // الدخول الفوري
+      window.location.replace('/'); 
     } catch (err: any) {
-      console.error(err);
-      setMessage(err.message || "حدث خطأ أثناء العملية");
+      setMessage(err.message === "Invalid login credentials" ? "بيانات الدخول غلط" : err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  // واجهة الموقع من الداخل (لو مسجل دخول)
   if (currentUser) {
     return (
-      <div className="min-h-screen bg-slate-50 pb-24" dir="rtl">
-        <div className="mx-auto max-w-md bg-white min-h-screen shadow-2xl relative">
-          <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur-md px-4 py-4 flex items-center justify-between">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tighter italic">REDA CHAT</h1>
-            <div className="flex gap-4 items-center">
-               <button onClick={() => router.push("/chat")} className="text-2xl relative">
-                  💬
-                  <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white"></span>
-               </button>
-               <button 
-                onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
-                className="h-10 w-10 rounded-full bg-linear-to-tr from-emerald-400 to-teal-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-sm"
-               >
-                {currentUser.profileName.charAt(0)}
-               </button>
-            </div>
+      <div className="min-h-screen bg-slate-50 flex justify-center" dir="rtl">
+        <div className="w-full max-w-md bg-white min-h-screen shadow-2xl flex flex-col">
+          
+          <header className="p-6 border-b flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-50">
+            <h1 className="text-2xl font-black text-emerald-600 italic">REDA CHAT</h1>
+            <button 
+              onClick={async () => { await supabase.auth.signOut(); window.location.replace('/'); }}
+              className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-red-50 transition-colors"
+            >🚪</button>
           </header>
 
-          <div className="flex gap-4 p-4 overflow-x-auto no-scrollbar border-b bg-slate-50/30">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="flex flex-col items-center gap-1 shrink-0">
-                <div className="w-16 h-16 rounded-full bg-linear-to-tr from-yellow-400 via-red-500 to-purple-600 p-0.5">
-                  <div className="w-full h-full bg-white rounded-full p-0.5">
-                    <div className="w-full h-full bg-slate-200 rounded-full" />
-                  </div>
-                </div>
-                <span className="text-[10px] text-slate-500">مستخدم {i}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="p-4 space-y-6">
-            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">R</div>
-                <div>
-                  <p className="text-sm font-bold text-slate-800">Reda Chat</p>
-                  <p className="text-[10px] text-slate-400">الآن</p>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                أهلاً بك يا <span className="text-emerald-600 font-bold">{currentUser.profileName}</span>. 
-                تم حل مشكلة الدخول بنجاح، استمتع بالدردشة!
+          <main className="flex-1 p-6 space-y-6">
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-[32px] p-8 text-white shadow-xl">
+              <h2 className="text-3xl font-bold mb-2">يا هلا، {currentUser.profileName}!</h2>
+              <p className="opacity-90 text-sm leading-relaxed">
+                دلوقتي أنت متصل بالداتا بيز. جرب تبحث عن أصحابك أو تدخل الدردشات.
               </p>
             </div>
-          </div>
 
-          <nav className="fixed bottom-0 left-1/2 z-50 w-full max-w-md -translate-x-1/2 flex justify-around items-center bg-white border-t py-3 px-6 shadow-lg">
-            <button onClick={() => router.push("/")} className="text-emerald-600 flex flex-col items-center">
-              <span className="text-2xl">🏠</span>
-              <span className="text-[10px] font-bold">الرئيسية</span>
-            </button>
-            <button onClick={() => router.push("/chat")} className="text-slate-400 flex flex-col items-center">
-              <span className="text-2xl">💬</span>
-              <span className="text-[10px] font-bold">الدردشات</span>
-            </button>
-            <button onClick={() => router.push("/profile")} className="text-slate-400 flex flex-col items-center">
-              <span className="text-2xl">👤</span>
-              <span className="text-[10px] font-bold">بروفايلي</span>
-            </button>
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => router.push("/search")} className="p-6 bg-white border border-slate-100 rounded-3xl text-right hover:shadow-md transition-all">
+                <span className="text-3xl block mb-3">🔍</span>
+                <span className="font-bold text-slate-800">البحث</span>
+              </button>
+              <button onClick={() => router.push("/chat")} className="p-6 bg-white border border-slate-100 rounded-3xl text-right hover:shadow-md transition-all">
+                <span className="text-3xl block mb-3">💬</span>
+                <span className="font-bold text-slate-800">الدردشات</span>
+              </button>
+            </div>
+          </main>
+
+          <nav className="p-4 bg-white border-t flex justify-around items-center sticky bottom-0">
+            <button className="text-emerald-600 text-2xl">🏠</button>
+            <button onClick={() => router.push("/search")} className="text-slate-300 text-2xl">🔍</button>
+            <button onClick={() => router.push("/chat")} className="text-slate-300 text-2xl">💬</button>
+            <button onClick={() => router.push("/profile")} className="text-slate-300 text-2xl">👤</button>
           </nav>
+
         </div>
       </div>
     );
   }
 
+  // واجهة تسجيل الدخول
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6" dir="rtl">
-      <div className="w-full max-w-md rounded-[40px] bg-white p-10 shadow-2xl">
-        <h1 className="text-4xl font-black text-center text-slate-900 mb-8 italic">REDA CHAT</h1>
-        <div className="mb-8 flex rounded-2xl bg-slate-100 p-1">
-          <button onClick={() => setMode("login")} className={`w-1/2 py-3 rounded-xl font-bold text-sm transition-all ${mode === "login" ? "bg-white shadow text-emerald-600" : "text-slate-400"}`}>دخول</button>
-          <button onClick={() => setMode("register")} className={`w-1/2 py-3 rounded-xl font-bold text-sm transition-all ${mode === "register" ? "bg-white shadow text-emerald-600" : "text-slate-400"}`}>جديد</button>
+      <div className="w-full max-w-md rounded-[45px] bg-white p-10 shadow-2xl border border-white">
+        <h1 className="text-4xl font-black text-center text-slate-900 mb-10 italic tracking-tighter">REDA CHAT</h1>
+        
+        <div className="mb-8 flex rounded-2xl bg-slate-100 p-1.5">
+          <button onClick={() => setMode("login")} className={`w-1/2 py-3 rounded-xl font-bold transition-all ${mode === "login" ? "bg-white shadow-sm text-emerald-600" : "text-slate-400"}`}>دخول</button>
+          <button onClick={() => setMode("register")} className={`w-1/2 py-3 rounded-xl font-bold transition-all ${mode === "register" ? "bg-white shadow-sm text-emerald-600" : "text-slate-400"}`}>جديد</button>
         </div>
+
         <div className="space-y-4">
           {mode === "register" && (
-            <input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="الاسم الكامل" className="w-full rounded-2xl bg-slate-50 p-4 outline-none focus:ring-2 ring-emerald-500" />
+            <input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="اسمك الكامل" className="w-full rounded-2xl bg-slate-50 p-4 border-none outline-none focus:ring-2 ring-emerald-500 transition-all" />
           )}
-          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="اسم المستخدم" className="w-full rounded-2xl bg-slate-50 p-4 outline-none focus:ring-2 ring-emerald-500" />
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full rounded-2xl bg-slate-50 p-4 outline-none focus:ring-2 ring-emerald-500" />
-          {message && <p className="text-center text-xs font-bold text-red-500">{message}</p>}
-          <button onClick={handleAuth} disabled={loading} className="w-full rounded-2xl bg-emerald-500 py-4 text-white font-bold shadow-lg hover:bg-emerald-600 transition-all">
-            {loading ? "لحظة..." : mode === "login" ? "دخول" : "إنشاء حساب"}
+          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="اسم المستخدم" className="w-full rounded-2xl bg-slate-50 p-4 border-none outline-none focus:ring-2 ring-emerald-500 transition-all" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full rounded-2xl bg-slate-50 p-4 border-none outline-none focus:ring-2 ring-emerald-500 transition-all" />
+          
+          {message && <div className="p-3 rounded-xl bg-red-50 text-red-500 text-xs font-bold text-center">{message}</div>}
+          
+          <button onClick={handleAuth} disabled={loading} className="w-full rounded-2xl bg-emerald-500 py-4 text-white font-black text-lg shadow-xl shadow-emerald-100 hover:bg-emerald-600 active:scale-95 transition-all">
+            {loading ? "لحظة..." : mode === "login" ? "تسجيل الدخول" : "إنشاء حساب مجاني"}
           </button>
         </div>
       </div>
