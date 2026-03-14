@@ -1,25 +1,28 @@
-hereimport { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const conversationId = searchParams.get("conversationId");
+    const userId = searchParams.get("userId"); // بنجيب الرسايل بناءً على اليوزر
+    const receiverId = searchParams.get("receiverId");
 
-    if (!conversationId) {
+    if (!userId || !receiverId) {
       return NextResponse.json([]);
     }
 
-    // ملاحظة: لو اسم الجدول عندك في الـ Schema هو Message (بالمفرد) 
-    // غير prisma.messages لـ prisma.message
+    // التعديل هنا: بنستخدم prisma.message (بالمفرد)
+    // وبندور بالمرسل والمستقبل لأن مفيش conversationId
     const messages = await prisma.message.findMany({
       where: {
-        conversationId: conversationId,
+        OR: [
+          { senderId: userId, receiverId: receiverId },
+          { senderId: receiverId, receiverId: userId }
+        ]
       },
       include: {
         sender: {
           select: {
-            id: true,
             username: true,
             profileName: true,
           },
@@ -32,10 +35,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(messages);
   } catch (error: any) {
-    // عرض الخطأ بالتفصيل في الـ Console عشان تعرف لو المشكلة في اسم الجدول
     console.error("❌ خطأ في جلب الرسائل:", error.message);
-    
-    // نرجع مصفوفة فارغة عشان الـ Frontend ما يضربش (Crash)
     return NextResponse.json([]);
   }
 }
