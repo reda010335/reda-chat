@@ -18,26 +18,36 @@ export default function Stories({ supabase, user }: any) {
     setUploading(true);
     try {
       const fileName = `story-${user.id}-${Date.now()}`;
-      await supabase.storage.from('avatars').upload(fileName, file);
-      const url = supabase.storage.from('avatars').getPublicUrl(fileName).data.publicUrl;
-      await supabase.from("Story").insert([{ imageUrl: url, authorId: user.id }]);
-      fetchStories();
-    } catch (err) { alert("خطأ في رفع الاستوري"); }
-    finally { setUploading(false); }
+      // الرفع
+      const { error: upErr } = await supabase.storage.from('avatars').upload(fileName, file);
+      if (upErr) throw upErr;
+
+      // جلب الرابط
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      
+      // الإدخال في الجدول مع التأكد من إتمام العملية
+      const { error: insErr } = await supabase.from("Story").insert([{ imageUrl: publicUrl, authorId: user.id }]);
+      if (insErr) throw insErr;
+
+      await fetchStories(); // تحديث فوري للقائمة
+    } catch (err) { 
+      console.error(err);
+      alert("حدث خطأ أثناء الرفع"); 
+    } finally { setUploading(false); }
   };
 
   return (
     <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
       <label className="flex-shrink-0 flex flex-col items-center gap-1 cursor-pointer">
         <div className="w-16 h-16 rounded-full border-2 border-dashed border-emerald-500 flex items-center justify-center text-emerald-500 bg-white dark:bg-slate-900 font-bold text-xl">
-          {uploading ? "..." : "+"}
+          {uploading ? <span className="animate-spin text-sm">⌛</span> : "+"}
         </div>
         <span className="text-[10px] dark:text-white font-bold">قصتك</span>
         <input type="file" hidden accept="image/*" onChange={handleUpload} />
       </label>
       {stories.map((s, i) => (
         <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1">
-          <div className="w-16 h-16 rounded-full border-2 border-emerald-500 p-0.5 shadow-sm">
+          <div className="w-16 h-16 rounded-full border-2 border-emerald-500 p-0.5">
             <img src={s.imageUrl} className="w-full h-full rounded-full object-cover border-2 border-white dark:border-slate-900" />
           </div>
           <span className="text-[10px] dark:text-white">{s.author?.profileName?.split(' ')[0]}</span>
