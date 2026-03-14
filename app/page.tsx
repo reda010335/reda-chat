@@ -12,9 +12,18 @@ type UserProfile = {
 
 export default function Home() {
   const router = useRouter();
+  
+  // إنشاء السوبابيز مع إعدادات الكوكيز لحل مشكلة 406
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookieOptions: {
+        name: "sb-auth-token",
+        sameSite: "lax",
+        secure: true,
+      }
+    }
   );
 
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -43,35 +52,53 @@ export default function Home() {
   const getFakeEmail = (user: string) => `${user.trim().toLowerCase()}@redachat.com`;
 
   const handleAuth = async () => {
+    if (!username || !password || (mode === "register" && !profileName)) {
+      setMessage("يرجى ملء جميع الحقول");
+      return;
+    }
+
     setLoading(true);
     setMessage("");
     const fakeEmail = getFakeEmail(username);
 
     try {
       if (mode === "register") {
+        // 1. إنشاء الحساب في Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: fakeEmail,
           password: password,
+          options: {
+            data: { display_name: profileName }
+          }
         });
+        
         if (authError) throw authError;
+
+        // 2. إضافة البيانات لجدول User
         if (authData.user) {
-          await supabase.from("User").upsert([{
+          const { error: dbError } = await supabase.from("User").insert([{
             id: authData.user.id,
             username: username.trim().toLowerCase(),
             profileName: profileName.trim(),
           }]);
+          if (dbError) throw dbError;
         }
       }
 
+      // 3. تسجيل الدخول
       const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email: fakeEmail,
         password: password,
       });
+
       if (loginError) throw loginError;
 
-      window.location.reload();
+      // 4. توجيه إجباري للصفحة الرئيسية لتحديث الحالة
+      window.location.href = "/";
+      
     } catch (err: any) {
-      setMessage(err.message || "حدث خطأ ما");
+      console.error(err);
+      setMessage(err.message || "حدث خطأ أثناء العملية");
     } finally {
       setLoading(false);
     }
@@ -81,7 +108,6 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-slate-50 pb-24" dir="rtl">
         <div className="mx-auto max-w-md bg-white min-h-screen shadow-2xl relative">
-          
           <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur-md px-4 py-4 flex items-center justify-between">
             <h1 className="text-2xl font-black text-slate-900 tracking-tighter italic">REDA CHAT</h1>
             <div className="flex gap-4 items-center">
@@ -89,13 +115,15 @@ export default function Home() {
                   💬
                   <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white"></span>
                </button>
-               <div className="h-10 w-10 rounded-full bg-linear-to-tr from-emerald-400 to-teal-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">
+               <button 
+                onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
+                className="h-10 w-10 rounded-full bg-linear-to-tr from-emerald-400 to-teal-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-sm"
+               >
                 {currentUser.profileName.charAt(0)}
-               </div>
+               </button>
             </div>
           </header>
 
-          {/* Stories - التعديلات تمت هنا */}
           <div className="flex gap-4 p-4 overflow-x-auto no-scrollbar border-b bg-slate-50/30">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex flex-col items-center gap-1 shrink-0">
@@ -119,7 +147,8 @@ export default function Home() {
                 </div>
               </div>
               <p className="text-sm text-slate-600 leading-relaxed">
-                أهلاً بك يا <span className="text-emerald-600 font-bold">{currentUser.profileName}</span>. هيكل إنستجرام أصبح جاهزاً الآن!
+                أهلاً بك يا <span className="text-emerald-600 font-bold">{currentUser.profileName}</span>. 
+                تم حل مشكلة الدخول بنجاح، استمتع بالدردشة!
               </p>
             </div>
           </div>
