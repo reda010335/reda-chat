@@ -23,21 +23,25 @@ export default function ChatListPage() {
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // جلب بيانات المستخدم الحالي
   useEffect(() => {
     const fetchMe = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.push("/signup");
-      setMe({
+
+      const meUser: User = {
         id: user.id,
         username: (user as any).username || "",
         profileName: (user as any).profileName || "",
         image: (user as any).image || "",
-      });
-      fetchFriends(user.id);
+      };
+      setMe(meUser);
+      fetchFriends(meUser.id);
     };
     fetchMe();
   }, []);
 
+  // جلب كل الأصدقاء
   const fetchFriends = async (myId: string) => {
     const { data: requests } = await supabase
       .from("Friend Request")
@@ -45,10 +49,12 @@ export default function ChatListPage() {
       .or(`and(senderId.eq.${myId},status.eq.accepted),and(receiverId.eq.${myId},status.eq.accepted)`);
 
     if (!requests) return;
+
     const friendsList: User[] = requests.map((r: any) => r.senderId === myId ? r.receiver : r.sender);
     setFriends(friendsList);
   };
 
+  // البحث عن مستخدمين جدد
   const searchUsers = async () => {
     if (!searchTerm.trim() || !me) return;
     setLoading(true);
@@ -89,25 +95,8 @@ export default function ChatListPage() {
         </button>
       </div>
 
-      {/* نتائج البحث */}
-      {searchResults.length > 0 && (
-        <div className="mb-6">
-          <h2 className="font-bold mb-2 text-slate-700">نتائج البحث</h2>
-          <div className="space-y-3">
-            {searchResults.map(u => (
-              <div key={u.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/chat/${u.id}`)}>
-                  <img src={u.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
-                  <span className="font-bold">{u.profileName}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* قائمة الأصدقاء */}
-      <div>
+      {/* قائمة الأصدقاء تظهر دائمًا */}
+      <div className="mb-6">
         <h2 className="font-bold mb-2 text-slate-700">أصدقائي</h2>
         {friends.length === 0 ? (
           <p className="text-slate-400 text-sm">لا يوجد أصدقاء بعد</p>
@@ -130,6 +119,29 @@ export default function ChatListPage() {
           </div>
         )}
       </div>
+
+      {/* نتائج البحث */}
+      {searchResults.length > 0 && (
+        <div className="mb-6">
+          <h2 className="font-bold mb-2 text-slate-700">نتائج البحث</h2>
+          <div className="space-y-3">
+            {searchResults.map(u => (
+              <div key={u.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/chat/${u.id}`)}>
+                  <img src={u.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
+                  <span className="font-bold">{u.profileName}</span>
+                </div>
+                <button
+                  onClick={() => router.push(`/chat/${u.id}`)}
+                  className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-bold text-xs"
+                >
+                  دردشة
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
