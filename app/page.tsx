@@ -13,7 +13,7 @@ export default function HomePage() {
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"home" | "friends" | "chat" | "profile">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "chat" | "profile">("home"); // ما فيش friends هنا
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<any[]>([]);
   const [chatUsers, setChatUsers] = useState<any[]>([]);
@@ -104,37 +104,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Friends Tab */}
-        {activeTab === "friends" && (
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-[35px] shadow-sm border border-slate-100 dark:border-slate-800">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">أصدقائك</h2>
-            {chatUsers.length === 0 ? (
-              <p className="text-slate-400 text-sm">ليس لديك أصدقاء بعد</p>
-            ) : (
-              chatUsers.map(f => (
-                <div key={f.id} className="flex items-center gap-4 mb-3">
-                  <img src={f.image || "/user.png"} className="w-12 h-12 rounded-full object-cover" />
-                  <span className="font-bold dark:text-white">{f.profileName}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => router.push(`/chat/${f.id}`)}
-                      className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-bold text-xs"
-                    >
-                      دردشة
-                    </button>
-                    <button
-                      onClick={() => router.push(`/profile/${f.id}`)}
-                      className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white px-3 py-1 rounded-xl font-bold text-xs"
-                    >
-                      بروفايل
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
         {/* Chat Tab */}
         {activeTab === "chat" && (
           <div className="space-y-3">
@@ -172,7 +141,11 @@ export default function HomePage() {
       {/* NavBar */}
       <nav className="fixed bottom-6 left-6 right-6 h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[30px] border border-white/20 shadow-xl flex justify-around items-center px-4 z-[100]">
         <NavBtn icon="🏠" active={activeTab === "home"} onClick={() => setActiveTab("home")} />
-        <NavBtn icon="👥" active={activeTab === "friends"} onClick={() => setActiveTab("friends")} />
+        <NavBtn
+          icon="👥"
+          active={false} // مش تاب داخلي
+          onClick={() => router.push("/friends")}
+        />
         <NavBtn icon="💬" active={activeTab === "chat"} onClick={() => setActiveTab("chat")} />
         <NavBtn icon="👤" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
       </nav>
