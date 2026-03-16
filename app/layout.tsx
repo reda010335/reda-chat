@@ -20,9 +20,10 @@ export default function RootLayout({
         {/* NavBar ثابت */}
         <nav className="fixed bottom-6 left-6 right-6 h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[30px] border border-white/20 shadow-xl flex justify-around items-center px-4 z-[100]">
           <NavBtn icon="🏠" href="/" />
-          <NavBtn icon="👥" href="/friends" />
-          <NavBtn icon="💬" href="/chat" />
-          <NavBtn icon="👤" href="/profile" />
+          <NavBtn icon="👥" href="/api/friends" />
+          <NavBtn icon="💬" href="/api/chat" />
+          <NavBtn icon="👤" href="/api/profile/[id]" />
+          <NavBtn icon="🔍" href="/api/search" />
         </nav>
       </body>
     </html>
