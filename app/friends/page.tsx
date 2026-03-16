@@ -17,7 +17,7 @@ type FriendRequest = {
   status: "pending" | "accepted" | "rejected";
   text?: string;
   createdAt: string;
-  sender?: User; // <--- هذا مهم
+  sender?: User;
 };
 
 export default function FriendsPage() {
@@ -215,12 +215,20 @@ export default function FriendsPage() {
             {friends.map(f => (
               <div key={f.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
                 <span>{f.profileName} (@{f.username})</span>
-                <button
-                  onClick={() => router.push(`/chat/${f.id}`)}
-                  className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-bold text-xs"
-                >
-                  دردشة
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => router.push(`/chat/${f.id}`)}
+                    className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-bold text-xs"
+                  >
+                    دردشة
+                  </button>
+                  <button
+                    onClick={() => router.push(`/profile/${f.id}`)}
+                    className="bg-slate-50 text-slate-800 px-3 py-1 rounded-xl font-bold text-xs"
+                  >
+                    بروفايل
+                  </button>
+                </div>
               </div>
             ))}
           </div>
