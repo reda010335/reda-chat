@@ -17,21 +17,22 @@ export default function ChatPage() {
   const [receiver, setReceiver] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // جلب بياناتي وبيانات المستقبل
   useEffect(() => {
     const initChat = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.push("/signup");
       setMyUser(user);
 
-      // جلب بيانات الشخص اللي بتكلمه
       const { data: receiverData } = await supabase
         .from("User")
         .select("*")
         .eq("id", receiverId)
         .maybeSingle();
+
+      if (!receiverData) return alert("المستخدم غير موجود!");
       setReceiver(receiverData);
 
-      // جلب الرسائل القديمة
       const { data: oldMessages } = await supabase
         .from("Message")
         .select("*")
@@ -39,12 +40,17 @@ export default function ChatPage() {
           `and(sender_id.eq.${user.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${user.id})`
         )
         .order("createdAt", { ascending: true });
+
       setMessages(oldMessages || []);
     };
 
     initChat();
+  }, [receiverId]);
 
-    // الاشتراك في Realtime
+  // الاشتراك في Realtime
+  useEffect(() => {
+    if (!myUser) return;
+
     const channel = supabase
       .channel(`chat_${receiverId}`)
       .on("postgres_changes", {
@@ -54,8 +60,8 @@ export default function ChatPage() {
       }, (payload) => {
         const msg = payload.new;
         if (
-          (msg.sender_id === myUser?.id && msg.receiver_id === receiverId) ||
-          (msg.sender_id === receiverId && msg.receiver_id === myUser?.id)
+          (msg.sender_id === myUser.id && msg.receiver_id === receiverId) ||
+          (msg.sender_id === receiverId && msg.receiver_id === myUser.id)
         ) {
           setMessages(prev => [...prev, msg]);
         }
@@ -65,16 +71,18 @@ export default function ChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [receiverId, myUser]);
 
+  // Scroll تلقائي
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // إرسال رسالة
   const sendMessage = async () => {
     if (!newMessage.trim() || !myUser) return;
+
     const msgContent = newMessage;
     setNewMessage("");
 
-    // إضافة الرسالة فوراً للواجهة قبل DB
     setMessages(prev => [...prev, {
       id: crypto.randomUUID(),
       content: msgContent,
@@ -94,16 +102,26 @@ export default function ChatPage() {
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden" dir="rtl">
       {/* Header */}
       <header className="bg-white dark:bg-slate-900 p-3 px-4 flex items-center justify-between border-b dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/profile/${receiverId}`)}>
-          <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold border-2 border-white dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center gap-3">
+          {/* صورة البروفايل */}
+          <div
+            className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold border-2 border-white dark:border-slate-700 overflow-hidden cursor-pointer"
+            onClick={() => router.push(`/profile/${receiverId}`)}
+          >
             {receiver?.image ? <img src={receiver.image} className="w-full h-full object-cover" /> : <span>{receiver?.profileName?.[0] || "?"}</span>}
           </div>
+
           <div className="flex flex-col">
-            <h2 className="font-black text-slate-800 dark:text-white text-[14px]">{receiver?.profileName || "جاري التحميل..."}</h2>
+            <h2 className="font-black text-slate-800 dark:text-white text-sm">{receiver?.profileName || "جاري التحميل..."}</h2>
             <p className="text-[10px] text-emerald-500 font-bold">متصل الآن</p>
           </div>
         </div>
-        <button onClick={() => router.back()} className="text-slate-400">⬅️</button>
+
+        {/* الثلاث نقاط */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.back()} className="text-slate-400">⬅️</button>
+          <button className="text-slate-400 text-xl">⋮</button>
+        </div>
       </header>
 
       {/* Messages */}
@@ -112,7 +130,8 @@ export default function ChatPage() {
           const isMine = msg.sender_id === myUser?.id;
           return (
             <div key={msg.id || idx} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] p-3 px-4 rounded-[22px] text-[15px] shadow-sm ${isMine ? "bg-emerald-600 text-white rounded-br-none" : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-none border dark:border-slate-800"}`}>
+              <div className={`max-w-[80%] p-3 px-4 rounded-[22px] text-[15px] shadow-sm 
+                ${isMine ? "bg-emerald-600 text-white rounded-br-none" : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-none border dark:border-slate-800"}`}>
                 {msg.content}
               </div>
             </div>
@@ -131,7 +150,12 @@ export default function ChatPage() {
             placeholder="اكتب رسالة..."
             className="flex-1 bg-transparent p-2 px-4 outline-none text-[15px] dark:text-white"
           />
-          <button onClick={sendMessage} className="bg-emerald-600 text-white w-10 h-10 flex items-center justify-center rounded-full active:scale-90 transition-all">📩</button>
+          <button
+            onClick={sendMessage}
+            className="bg-emerald-600 text-white w-10 h-10 flex items-center justify-center rounded-full active:scale-90 transition-all"
+          >
+            📩
+          </button>
         </div>
       </div>
     </div>
