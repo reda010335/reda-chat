@@ -15,7 +15,6 @@ type FriendRequest = {
   senderId: string;
   receiverId: string;
   status: "pending" | "accepted" | "rejected";
-  text?: string;
   createdAt: string;
   sender?: User;
 };
@@ -33,6 +32,7 @@ export default function FriendsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
 
   // جلب بيانات المستخدم الحالي
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function FriendsPage() {
     setFriends(friendsList);
   };
 
-  // جلب طلبات الصداقة المرسلة إليك
+  // جلب طلبات الصداقة
   const fetchFriendRequests = async (myId: string) => {
     const { data } = await supabase
       .from("Friend Request")
@@ -79,41 +79,6 @@ export default function FriendsPage() {
       .eq("receiverId", myId)
       .eq("status", "pending");
     setFriendRequests(data || []);
-  };
-
-  // إرسال طلب صداقة
-  const sendFriendRequest = async (targetId: string) => {
-    if (!me) return;
-    setLoading(true);
-    try {
-      await supabase.from("Friend Request").insert([
-        { senderId: me.id, receiverId: targetId, status: "pending", text: "طلب صداقة" }
-      ]);
-      alert("تم إرسال طلب الصداقة!");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // قبول أو رفض طلب صداقة
-  const handleFriendRequest = async (requestId: string, accept: boolean) => {
-    setLoading(true);
-    try {
-      await supabase
-        .from("Friend Request")
-        .update({ status: accept ? "accepted" : "rejected" })
-        .eq("id", requestId);
-      if (me) {
-        fetchFriends(me.id);
-        fetchFriendRequests(me.id);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
   };
 
   // البحث عن مستخدمين
@@ -135,9 +100,39 @@ export default function FriendsPage() {
     }
   };
 
+  // إرسال طلب متابعة
+  const followUser = async (userId: string) => {
+    if (!me) return;
+    try {
+      // هنا تخزن الطلب في جدول Follow مثلا
+      await supabase.from("Follow").insert([{ followerId: me.id, followingId: userId }]);
+      setFollowingIds(prev => [...prev, userId]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // قبول أو رفض طلب صداقة
+  const handleFriendRequest = async (requestId: string, accept: boolean) => {
+    if (!me) return;
+    setLoading(true);
+    try {
+      await supabase
+        .from("Friend Request")
+        .update({ status: accept ? "accepted" : "rejected" })
+        .eq("id", requestId);
+      fetchFriends(me.id);
+      fetchFriendRequests(me.id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-4 pb-24" dir="rtl">
-      <h1 className="text-2xl font-black mb-4">الأصدقاء وطلبات الصداقة</h1>
+    <div className="min-h-screen bg-slate-50 p-4 pb-32" dir="rtl">
+      <h1 className="text-2xl font-black mb-6">الأصدقاء وطلبات الصداقة</h1>
 
       {/* البحث */}
       <div className="flex gap-2 mb-6">
@@ -164,12 +159,15 @@ export default function FriendsPage() {
           <div className="space-y-3">
             {searchResults.map(u => (
               <div key={u.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
-                <span>{u.profileName} (@{u.username})</span>
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/chat/${u.id}`)}>
+                  <img src={u.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
+                  <span className="font-bold">{u.profileName}</span>
+                </div>
                 <button
-                  onClick={() => sendFriendRequest(u.id)}
-                  className="bg-emerald-600 text-white px-4 py-1 rounded-xl font-bold text-xs"
+                  onClick={() => followUser(u.id)}
+                  className={`px-4 py-1 rounded-xl font-bold text-xs ${followingIds.includes(u.id) ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-600"}`}
                 >
-                  إرسال طلب صداقة
+                  {followingIds.includes(u.id) ? "متابع" : "متابعة"}
                 </button>
               </div>
             ))}
@@ -184,7 +182,10 @@ export default function FriendsPage() {
           <div className="space-y-3">
             {friendRequests.map(req => (
               <div key={req.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
-                <span>{req.sender?.profileName} (@{req.sender?.username})</span>
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/profile/${req.sender?.id}`)}>
+                  <img src={req.sender?.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
+                  <span className="font-bold">{req.sender?.profileName}</span>
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleFriendRequest(req.id, true)}
@@ -214,19 +215,17 @@ export default function FriendsPage() {
           <div className="space-y-3">
             {friends.map(f => (
               <div key={f.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
-                <span>{f.profileName} (@{f.username})</span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/profile/${f.id}`)}>
+                  <img src={f.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
+                  <span className="font-bold">{f.profileName}</span>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <span className="cursor-pointer text-slate-500 text-xs" onClick={() => router.push(`/chat/${f.id}`)}>دردشة</span>
                   <button
-                    onClick={() => router.push(`/chat/${f.id}`)}
-                    className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-bold text-xs"
+                    onClick={() => followUser(f.id)}
+                    className={`px-3 py-1 rounded-xl font-bold text-xs ${followingIds.includes(f.id) ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-600"}`}
                   >
-                    دردشة
-                  </button>
-                  <button
-                    onClick={() => router.push(`/profile/${f.id}`)}
-                    className="bg-slate-50 text-slate-800 px-3 py-1 rounded-xl font-bold text-xs"
-                  >
-                    بروفايل
+                    {followingIds.includes(f.id) ? "متابع" : "متابعة"}
                   </button>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
@@ -12,11 +13,11 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const userId = "currentUserId"; // هنا تحط id المستخدم الحالي
+  const userId = "currentUserId"; // هنا خليها ديناميكية حسب الجلسة
 
   return (
     <html lang="en">
-      <body className="antialiased relative pb-32">
+      <body className="antialiased relative pb-32 bg-[#F8FAFC] dark:bg-slate-950">
         {children}
 
         {/* NavBar ثابت */}
