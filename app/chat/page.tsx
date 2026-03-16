@@ -23,7 +23,6 @@ export default function ChatListPage() {
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // جلب بيانات المستخدم
   useEffect(() => {
     const fetchMe = async () => {
       const { data: { user } } = await supabase.auth.getUser();
