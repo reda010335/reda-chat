@@ -25,7 +25,7 @@ export default function RootLayout({
           <NavBtn icon="🏠" href="/" />
           <NavBtn icon="👥" href="/friends" />
           <NavBtn icon="💬" href="/chat" />
-          <NavBtn icon="👤" href={`/profile/${userId}`} />
+          <NavBtn icon="👤" href={`/profile/[id]/${userId}`} />
         </nav>
       </body>
     </html>
