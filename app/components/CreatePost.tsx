@@ -1,53 +1,58 @@
 "use client";
 import { useState, useRef } from "react";
 
-export default function CreatePost({ supabase, user, onPostCreated }: any) {
+type CreatePostProps = {
+  supabase: any;
+  user: { id: string };
+  onPostCreated: () => void;
+};
+
+export default function CreatePost({ supabase, user, onPostCreated }: CreatePostProps) {
   const [content, setContent] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePost = async (file?: File) => {
-    // منع النشر لو مفيش محتوى ولا صورة
     if (!content.trim() && !file) return;
-    
+
     setUploading(true);
-    let mediaUrl = null;
+    let mediaUrl: string | null = null;
+    let mediaType: "image" | "video" | "text" = "text";
 
     try {
-      // 1. معالجة رفع الملفات (صور أو فيديو)
+      // رفع الملف لو موجود
       if (file) {
-        const fileExt = file.name.split('.').pop();
-        // تنظيم الملفات في فولدرات باسم المستخدم
+        const fileExt = file.name.split(".").pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-        
         const { error: upErr } = await supabase.storage
-          .from('posts')
+          .from("posts")
           .upload(fileName, file);
 
         if (upErr) throw upErr;
 
-        const { data: { publicUrl } } = supabase.storage.from('posts').getPublicUrl(fileName);
-        mediaUrl = publicUrl;
+        const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
+        mediaUrl = data.publicUrl;
+        mediaType = file.type.startsWith("video") ? "video" : "image";
       }
 
-      // 2. إرسال البيانات لقاعدة البيانات
-      const { error: insErr } = await supabase.from("Post").insert([{
-        // الحل السحري لمشكلة الـ id: توليد UUID محلياً
-        id: crypto.randomUUID(), 
-        content: content,
-        authorId: user.id,
-        mediaUrl: mediaUrl,
-        mediaType: file?.type.startsWith('video') ? 'video' : (mediaUrl ? 'image' : 'text'),
-        createdAt: new Date().toISOString()
-      }]);
+      // إدخال البوست في الـ DB
+      const { error: insErr } = await supabase.from("Post").insert([
+        {
+          id: crypto.randomUUID(),
+          content: content.trim(),
+          authorId: user.id,
+          mediaUrl,
+          mediaType,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
 
       if (insErr) throw insErr;
-      
-      // 3. نجاح العملية وتنظيف الواجهة
-      alert("تم النشر بنجاح! 🚀");
+
+      // تنظيف الواجهة وتحديث الـ parent
       setContent("");
       if (fileInputRef.current) fileInputRef.current.value = "";
-      onPostCreated(); 
+      onPostCreated();
 
     } catch (err: any) {
       console.error("Post Error:", err);
@@ -59,36 +64,36 @@ export default function CreatePost({ supabase, user, onPostCreated }: any) {
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-[30px] p-5 shadow-sm border dark:border-slate-800">
-      <textarea 
-        value={content} 
-        onChange={e => setContent(e.target.value)} 
-        placeholder="إيه الجديد يا بطل؟" 
-        className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 text-sm outline-none resize-none dark:text-white" 
-        rows={2} 
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="إيه الجديد يا بطل؟"
+        className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 text-sm outline-none resize-none dark:text-white"
+        rows={2}
       />
-      
+
       <div className="flex justify-between items-center mt-4">
         {/* زر اختيار الميديا */}
-        <button 
-          onClick={() => fileInputRef.current?.click()} 
+        <button
+          onClick={() => fileInputRef.current?.click()}
           className="text-2xl hover:scale-110 transition-transform p-2 bg-slate-100 dark:bg-slate-800 rounded-full"
           title="صور أو فيديو"
         >
           🖼️
         </button>
-        
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          hidden 
-          accept="image/*,video/*" 
-          onChange={(e) => e.target.files?.[0] && handlePost(e.target.files[0])} 
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          hidden
+          accept="image/*,video/*"
+          onChange={(e) => e.target.files?.[0] && handlePost(e.target.files[0])}
         />
 
         {/* زر النشر */}
-        <button 
-          onClick={() => handlePost()} 
-          disabled={uploading} 
+        <button
+          onClick={() => handlePost()}
+          disabled={uploading}
           className="bg-emerald-600 text-white px-8 py-2.5 rounded-full font-black text-sm shadow-lg shadow-emerald-200 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploading ? (
@@ -96,7 +101,9 @@ export default function CreatePost({ supabase, user, onPostCreated }: any) {
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               جاري...
             </span>
-          ) : "نشر"}
+          ) : (
+            "نشر"
+          )}
         </button>
       </div>
     </div>

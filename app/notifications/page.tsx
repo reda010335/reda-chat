@@ -3,39 +3,65 @@ import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 
+type Notification = {
+  id: string;
+  text: string;
+  type: string;
+  isRead: boolean;
+  created_at: string;
+  senderId: string;
+  receiverId: string;
+  postId?: string;
+};
+
 export default function NotificationsPage() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   const router = useRouter();
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchNotifications = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.push("/signup");
 
-      // جلب الإشعارات مع بيانات الشخص اللي بعت الإشعار
-      const { data } = await supabase
-        .from("Notification")
-        .select(`*, sender:User!Notification_senderId_fkey(profileName, image, username)`)
-        .eq("receiverId", user.id)
-        .order("created_at", { ascending: false });
+      setMeId(user.id);
 
-      if (data) setNotifications(data);
-      
-      // بمجرد فتح الصفحة، بنخلي كل الإشعارات "مقروءة"
-      await supabase.from("Notification").update({ isRead: true }).eq("receiverId", user.id);
-      
-      setLoading(false);
+      try {
+        // جلب الإشعارات للمستخدم الحالي
+        const { data } = await supabase
+          .from("Notification")
+          .select("*")
+          .eq("receiverId", user.id)
+          .order("created_at", { ascending: false });
+
+        if (data) setNotifications(data as Notification[]);
+
+        // تحديث كل الإشعارات كمقروءة
+        await supabase
+          .from("Notification")
+          .update({ isRead: true })
+          .eq("receiverId", user.id);
+
+      } catch (err) {
+        console.error("Fetch notifications error:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchNotifications();
   }, []);
 
-  if (loading) return <div className="h-screen flex items-center justify-center font-black text-emerald-600 animate-pulse">جاري التحميل...</div>;
+  if (loading) return (
+    <div className="h-screen flex items-center justify-center font-black text-emerald-600 animate-pulse">
+      جاري التحميل...
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20" dir="rtl">
@@ -51,27 +77,17 @@ export default function NotificationsPage() {
           notifications.map((notif) => (
             <div 
               key={notif.id} 
-              className={`p-4 rounded-2xl border flex items-center gap-4 transition-all ${notif.isRead ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800 shadow-sm'}`}
+              className={`p-4 rounded-2xl border flex flex-col gap-2 transition-all ${notif.isRead ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800 shadow-sm'}`}
             >
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200 flex-shrink-0 border-2 border-white dark:border-slate-700">
-                {notif.sender?.image ? <img src={notif.sender.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold text-emerald-600">{notif.sender?.profileName[0]}</div>}
-              </div>
-              
-              <div className="flex-1">
-                <p className="text-sm dark:text-white leading-tight">
-                  <span className="font-black">{notif.sender?.profileName}</span> 
-                  {notif.type === 'like' ? ' أعجب بمنشورك ❤️' : 
-                   notif.type === 'follow' ? ' بدأ في متابعتك ✅' : 
-                   ' تفاعل معك'}
-                </p>
-                <span className="text-[10px] text-slate-400">
-                   {new Date(notif.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-
-              {notif.type === 'follow' && (
-                <button className="bg-emerald-600 text-white text-[10px] px-3 py-1.5 rounded-lg font-bold">رد المتابعة</button>
-              )}
+              <p className="text-sm dark:text-white">
+                {notif.text || 
+                 (notif.type === 'like' ? 'أعجب بمنشورك ❤️' : 
+                  notif.type === 'follow' ? 'بدأ في متابعتك ✅' : 
+                  'تفاعل معك')}
+              </p>
+              <span className="text-[10px] text-slate-400">
+                {new Date(notif.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
           ))
         )}
