@@ -77,11 +77,12 @@ export default function HomePage() {
       `)
       .order("createdAt", { ascending: false });
 
-    if (!error) {
-      setPosts((data as Post[]) || []);
-    } else {
-      console.error(error);
+    if (error) {
+      console.error("Fetch posts error:", error.message);
+      return;
     }
+
+    setPosts((data as Post[]) || []);
   }, [supabase]);
 
   useEffect(() => {
@@ -176,12 +177,43 @@ export default function HomePage() {
       setCommentText("");
       await fetchPosts();
 
-      setActivePost((prev) => {
-        if (!prev) return prev;
-        if (prev.id !== currentPostId) return prev;
+      const { data } = await supabase
+        .from("Post")
+        .select(`
+          id,
+          content,
+          createdAt,
+          image,
+          authorId,
+          author:User!Post_authorId_fkey(
+            id,
+            profileName,
+            username,
+            image
+          ),
+          likes:Like(
+            id,
+            userId
+          ),
+          comments:Comment(
+            id,
+            content,
+            createdAt,
+            authorId,
+            author:User!Comment_authorId_fkey(
+              id,
+              profileName,
+              username,
+              image
+            )
+          )
+        `)
+        .eq("id", currentPostId)
+        .maybeSingle();
 
-        return posts.find((p) => p.id === currentPostId) || prev;
-      });
+      if (data) {
+        setActivePost(data as Post);
+      }
     } catch (err: any) {
       console.error("Comment error:", err.message);
       alert(`فشل إضافة التعليق: ${err.message}`);
@@ -227,7 +259,7 @@ export default function HomePage() {
         alert("تم نسخ محتوى المنشور.");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Share error:", err);
     }
   };
 
@@ -252,6 +284,7 @@ export default function HomePage() {
                 REDA CHAT
               </h1>
             </div>
+
             <button
               onClick={() => router.push("/notifications")}
               className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600 dark:bg-slate-800"
@@ -416,6 +449,7 @@ export default function HomePage() {
                   {new Date(activePost.createdAt).toLocaleString("ar-EG")}
                 </p>
               </div>
+
               <button
                 onClick={() => setActivePost(null)}
                 className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 dark:bg-slate-800 dark:text-white"

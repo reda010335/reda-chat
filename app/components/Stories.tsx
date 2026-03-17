@@ -54,6 +54,7 @@ export default function Stories({ supabase, user }: StoriesProps) {
         .order("createdAt", { ascending: false });
 
       if (error) throw error;
+
       setStories((data as Story[]) || []);
     } catch (err: any) {
       console.error("Fetch stories error:", err.message);
@@ -74,15 +75,15 @@ export default function Stories({ supabase, user }: StoriesProps) {
 
     try {
       const fileExt = file.name.split(".").pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      const fileName = `stories/${user.id}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("stories")
+        .from("posts")
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from("stories").getPublicUrl(fileName);
+      const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
       const imageUrl = data.publicUrl;
 
       const { error: insertError } = await supabase.from("Story").insert([
