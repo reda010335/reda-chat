@@ -23,11 +23,11 @@ export async function GET(req: NextRequest) {
     const formatted = conversations.map((conv) => ({
       id: conv.id,
       otherUser: conv.user1Id === userId ? conv.user2 : conv.user1,
-      lastMessage: conv.messages[0]?.content || "ابدأ المحادثة الآن",
+      lastMessage: conv.messages[0]?.content || "Start the conversation now",
     }));
 
     return NextResponse.json(formatted);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

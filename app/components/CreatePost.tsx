@@ -1,111 +1,107 @@
 "use client";
-import { useState, useRef } from "react";
+
+import { useRef, useState } from "react";
 
 type CreatePostProps = {
   supabase: any;
   user: { id: string };
-  onPostCreated: () => void;
+  onPostCreated: () => Promise<void> | void;
 };
 
-export default function CreatePost({ supabase, user, onPostCreated }: CreatePostProps) {
+export default function CreatePost({
+  supabase,
+  user,
+  onPostCreated,
+}: CreatePostProps) {
   const [content, setContent] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePost = async (file?: File) => {
-    if (!content.trim() && !file) return;
+    if (!content.trim() && !file) {
+      return;
+    }
 
     setUploading(true);
-    let mediaUrl: string | null = null;
-    let mediaType: "image" | "video" | "text" = "text";
+    let image: string | null = null;
 
     try {
-      // رفع الملف لو موجود
       if (file) {
         const fileExt = file.name.split(".").pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-        const { error: upErr } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from("posts")
           .upload(fileName, file);
 
-        if (upErr) throw upErr;
+        if (uploadError) {
+          throw uploadError;
+        }
 
         const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
-        mediaUrl = data.publicUrl;
-        mediaType = file.type.startsWith("video") ? "video" : "image";
+        image = data.publicUrl;
       }
 
-      // إدخال البوست في الـ DB
-      const { error: insErr } = await supabase.from("Post").insert([
+      const { error: insertError } = await supabase.from("Post").insert([
         {
-          id: crypto.randomUUID(),
           content: content.trim(),
           authorId: user.id,
-          mediaUrl,
-          mediaType,
-          createdAt: new Date().toISOString(),
+          image,
         },
       ]);
 
-      if (insErr) throw insErr;
+      if (insertError) {
+        throw insertError;
+      }
 
-      // تنظيف الواجهة وتحديث الـ parent
       setContent("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      onPostCreated();
-
-    } catch (err: any) {
-      console.error("Post Error:", err);
-      alert(`فشل النشر: ${err.message}`);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      await onPostCreated();
+    } catch (error: any) {
+      console.error("Post Error:", error);
+      alert(`Publishing failed: ${error.message}`);
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-[30px] p-5 shadow-sm border dark:border-slate-800">
+    <section className="rounded-[32px] border border-white/70 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-slate-900/90">
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        placeholder="إيه الجديد يا بطل؟"
-        className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 text-sm outline-none resize-none dark:text-white"
-        rows={2}
+        placeholder="Share an update with your friends"
+        className="min-h-28 w-full resize-none rounded-[24px] bg-slate-50 p-4 text-sm outline-none ring-0 transition focus:bg-white dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800"
       />
 
-      <div className="flex justify-between items-center mt-4">
-        {/* زر اختيار الميديا */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="text-2xl hover:scale-110 transition-transform p-2 bg-slate-100 dark:bg-slate-800 rounded-full"
-          title="صور أو فيديو"
-        >
-          🖼️
-        </button>
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
+            type="button"
+          >
+            Add image
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept="image/*"
+            onChange={(e) => e.target.files?.[0] && handlePost(e.target.files[0])}
+          />
+        </div>
 
-        <input
-          type="file"
-          ref={fileInputRef}
-          hidden
-          accept="image/*,video/*"
-          onChange={(e) => e.target.files?.[0] && handlePost(e.target.files[0])}
-        />
-
-        {/* زر النشر */}
         <button
           onClick={() => handlePost()}
           disabled={uploading}
-          className="bg-emerald-600 text-white px-8 py-2.5 rounded-full font-black text-sm shadow-lg shadow-emerald-200 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+          type="button"
+          className="rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {uploading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              جاري...
-            </span>
-          ) : (
-            "نشر"
-          )}
+          {uploading ? "Publishing..." : "Publish"}
         </button>
       </div>
-    </div>
+    </section>
   );
 }

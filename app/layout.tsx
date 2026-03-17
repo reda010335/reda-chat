@@ -1,44 +1,23 @@
-// app/layout.tsx
 import type { Metadata } from "next";
+import BottomNav from "@/app/components/BottomNav";
 import "./globals.css";
-import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "REDA CHAT",
-  description: "Chat App",
+  description: "Modern social chat experience built with Next.js, Supabase, and Prisma.",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
-  const userId = "currentUserId"; // هنا خليها ديناميكية حسب الجلسة
-
+}>) {
   return (
-    <html lang="en">
-      <body className="antialiased relative pb-32 bg-[#F8FAFC] dark:bg-slate-950">
+    <html lang="ar">
+      <body className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(180deg,_#f8fafc_0%,_#eef6f3_100%)] pb-32 antialiased dark:bg-[linear-gradient(180deg,_#020617_0%,_#0f172a_100%)]">
         {children}
-
-        {/* NavBar ثابت */}
-        <nav className="fixed bottom-6 left-6 right-6 h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[30px] border border-white/20 shadow-xl flex justify-around items-center px-4 z-[100]">
-          <NavBtn icon="🏠" href="/" />
-          <NavBtn icon="👥" href="/friends" />
-          <NavBtn icon="💬" href="/chat" />
-          <NavBtn icon="👤" href="/profile/[id]" />
-        </nav>
+        <BottomNav />
       </body>
     </html>
-  );
-}
-
-function NavBtn({ icon, href }: { icon: string; href: string }) {
-  return (
-    <Link
-      href={href}
-      className="flex flex-col items-center justify-center w-14 h-14 rounded-2xl text-slate-400 transition-all hover:bg-emerald-600 hover:text-white"
-    >
-      <span className="text-2xl">{icon}</span>
-    </Link>
   );
 }

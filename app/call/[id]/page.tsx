@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  StreamVideoClient,
-  StreamVideo,
-  StreamCall,
+  Call,
+  CallControls,
   SpeakerLayout,
-  CallControls
+  StreamCall,
+  StreamVideo,
+  StreamVideoClient,
 } from "@stream-io/video-react-sdk";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
 import { useParams, useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
 
@@ -18,65 +19,90 @@ export default function VideoCallPage() {
   const params = useParams();
   const router = useRouter();
   const callId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   const [client, setClient] = useState<StreamVideoClient | null>(null);
-  const [call, setCall] = useState<any>(null);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const [call, setCall] = useState<Call | null>(null);
 
   useEffect(() => {
-    if (!callId) return;
+    if (!callId) {
+      return;
+    }
+
+    let mounted = true;
+    let activeClient: StreamVideoClient | null = null;
+    let activeCall: Call | null = null;
 
     const initCall = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return router.push("/login");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/signup");
+        return;
+      }
 
       const res = await fetch(`/api/stream-token?userId=${session.user.id}`);
       const { token } = await res.json();
 
-      const _client = new StreamVideoClient({
+      activeClient = new StreamVideoClient({
         apiKey,
         user: { id: session.user.id },
-        token
+        token,
       });
 
       try {
         await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       } catch {
-        alert("من فضلك فعّل الكاميرا والميكروفون!");
+        alert("Please enable camera and microphone access.");
         return;
       }
 
-      const _call = _client.call("default", callId);
-      await _call.join({ create: true });
+      activeCall = activeClient.call("default", callId);
+      await activeCall.join({ create: true });
 
-      setClient(_client);
-      setCall(_call);
+      if (!mounted) {
+        await activeCall.leave();
+        await activeClient.disconnectUser();
+        return;
+      }
+
+      setClient(activeClient);
+      setCall(activeCall);
     };
 
     initCall();
 
     return () => {
-      if (call) call.leave();
-      if (client) client.disconnectUser();
+      mounted = false;
+
+      if (activeCall) {
+        void activeCall.leave();
+      }
+
+      if (activeClient) {
+        void activeClient.disconnectUser();
+      }
     };
   }, [callId, router, supabase]);
 
-  if (!callId) return <div>Call ID غير موجود</div>;
-  if (!client || !call)
+  if (!callId) {
+    return <div className="p-10 text-center">Call ID is missing.</div>;
+  }
+
+  if (!client || !call) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-900 text-white font-bold">
-        جاري فتح الكاميرا... 📹
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-lg font-bold text-white">
+        Opening camera...
       </div>
     );
+  }
 
   return (
     <StreamVideo client={client}>
       <StreamCall call={call}>
-        <div className="h-screen bg-slate-900 relative">
+        <div className="relative h-screen bg-slate-900">
           <SpeakerLayout />
           <div className="absolute bottom-10 left-0 right-0 flex justify-center">
             <CallControls onLeave={() => router.back()} />

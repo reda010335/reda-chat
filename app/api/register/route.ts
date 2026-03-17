@@ -1,50 +1,56 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma"; // استخدم النسخة الموحدة من بريزما
-import { createBrowserClient } from "@supabase/ssr"; // أو النوع المناسب حسب مكان الاستخدام
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { username, password, profileName, supabaseUserId } = body;
 
-    // 1. التأكد من البيانات
     if (!username || !password) {
-      return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
+      return NextResponse.json({ error: "Missing required data" }, { status: 400 });
     }
 
-    // 2. فحص هل المستخدم موجود في Prisma قبل أي شيء
+    const normalizedUsername = username.trim().toLowerCase();
+
     const existingUser = await prisma.user.findUnique({
-      where: { username: username.trim().toLowerCase() }
+      where: { username: normalizedUsername },
     });
 
     if (existingUser) {
-      return NextResponse.json({ error: "اسم المستخدم مستخدم بالفعل" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Username is already taken" },
+        { status: 400 }
+      );
     }
 
-    // 3. ملاحظة مهمة: التسجيل في Supabase Auth يفضل يتم من الـ Client 
-    // لكن لو بعت الـ UUID من الفرونت إند بعد نجاح التسجيل هناك:
-    
     if (!supabaseUserId) {
-       return NextResponse.json({ error: "يجب توفر معرف Supabase" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Supabase user id is required" },
+        { status: 400 }
+      );
     }
 
-    // 4. إنشاء المستخدم في Prisma باستخدام الـ ID القادم من سوبابيز
     const user = await prisma.user.create({
       data: {
-        id: supabaseUserId, // نستخدم الـ ID بتاع سوبابيز عشان الربط
-        username: username.trim().toLowerCase(),
-        password: password, // في الغالب سوبابيز بتدير الباسورد فممكن تخلي الحقل ده اختياري أو تحفظه كـ placeholder
+        id: supabaseUserId,
+        username: normalizedUsername,
+        password,
         profileName: profileName || username,
       },
     });
 
-    return NextResponse.json({ 
-        message: "تم حفظ بيانات البروفايل بنجاح", 
-        user 
-    }, { status: 201 });
-
+    return NextResponse.json(
+      {
+        message: "Profile saved successfully",
+        user,
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("REGISTER_ERROR:", error.message);
-    return NextResponse.json({ error: "حدث خطأ: " + error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: `Registration failed: ${error.message}` },
+      { status: 500 }
+    );
   }
 }

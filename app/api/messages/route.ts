@@ -26,7 +26,11 @@ export async function GET(req: Request) {
 
     return NextResponse.json(messages);
   } catch (error: any) {
+<<<<<<< HEAD
     console.error("❌ GET /api/messages error:", error);
+=======
+    console.error("GET /api/messages error:", error);
+>>>>>>> e715f8c (Refactor chat app and fix messaging flow)
     return NextResponse.json(
       { error: error.message || "حدث خطأ أثناء جلب الرسائل" },
       { status: 500 }
@@ -59,7 +63,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json(newMessage);
   } catch (error: any) {
+<<<<<<< HEAD
     console.error("❌ POST /api/messages error:", error);
+=======
+    console.error("POST /api/messages error:", error);
+>>>>>>> e715f8c (Refactor chat app and fix messaging flow)
     return NextResponse.json(
       { error: error.message || "حدث خطأ أثناء إرسال الرسالة" },
       { status: 500 }

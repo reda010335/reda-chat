@@ -1,22 +1,20 @@
-import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { NextResponse } from "next/server";
 
-// بيانات Stream
-const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
 const apiSecret = process.env.STREAM_SECRET_KEY!;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
 
-  if (!userId) return NextResponse.json({ error: "userId مطلوب" }, { status: 400 });
+  if (!userId) {
+    return NextResponse.json({ error: "userId is required" }, { status: 400 });
+  }
 
-  // هنا بنعمل Token يدوي، حسب docs Stream Video
-  // Stream Video uses JWT tokens with HMAC SHA256
   const payload = {
     user_id: userId,
     iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 60 * 60, // 1 ساعة صلاحية
+    exp: Math.floor(Date.now() / 1000) + 60 * 60,
   };
 
   const header = {
@@ -45,7 +43,5 @@ export async function GET(req: Request) {
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
 
-  const jwt = token + "." + signature;
-
-  return NextResponse.json({ token: jwt });
+  return NextResponse.json({ token: `${token}.${signature}` });
 }

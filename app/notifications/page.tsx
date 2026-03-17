@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Notification = {
   id: string;
@@ -15,78 +16,100 @@ type Notification = {
 };
 
 export default function NotificationsPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [meId, setMeId] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return router.push("/signup");
+    let mounted = true;
 
-      setMeId(user.id);
+    const fetchNotifications = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/signup");
+        return;
+      }
 
       try {
-        // جلب الإشعارات للمستخدم الحالي
         const { data } = await supabase
           .from("Notification")
           .select("*")
           .eq("receiverId", user.id)
           .order("created_at", { ascending: false });
 
-        if (data) setNotifications(data as Notification[]);
+        if (mounted && data) {
+          setNotifications(data as Notification[]);
+        }
 
-        // تحديث كل الإشعارات كمقروءة
         await supabase
           .from("Notification")
           .update({ isRead: true })
           .eq("receiverId", user.id);
-
-      } catch (err) {
-        console.error("Fetch notifications error:", err);
+      } catch (error) {
+        console.error("Fetch notifications error:", error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchNotifications();
-  }, []);
 
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center font-black text-emerald-600 animate-pulse">
-      جاري التحميل...
-    </div>
-  );
+    return () => {
+      mounted = false;
+    };
+  }, [router, supabase]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center font-black text-emerald-600 animate-pulse">
+        Loading notifications...
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20" dir="rtl">
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b dark:border-slate-800 px-5 py-4 flex items-center gap-4">
-        <button onClick={() => router.back()} className="text-xl">➡️</button>
-        <h1 className="text-xl font-black dark:text-white">الإشعارات</h1>
+    <div className="min-h-screen bg-slate-50 pb-20 dark:bg-slate-950" dir="rtl">
+      <header className="sticky top-0 z-50 flex items-center gap-4 border-b bg-white/80 px-5 py-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
+        <button onClick={() => router.back()} className="text-sm font-semibold">
+          Back
+        </button>
+        <h1 className="text-xl font-black dark:text-white">Notifications</h1>
       </header>
 
-      <main className="max-w-md mx-auto p-4 space-y-3">
+      <main className="mx-auto max-w-md space-y-3 p-4">
         {notifications.length === 0 ? (
-          <div className="text-center py-20 text-slate-400">لا توجد إشعارات حتى الآن</div>
+          <div className="py-20 text-center text-slate-400">
+            No notifications yet.
+          </div>
         ) : (
           notifications.map((notif) => (
-            <div 
-              key={notif.id} 
-              className={`p-4 rounded-2xl border flex flex-col gap-2 transition-all ${notif.isRead ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800 shadow-sm'}`}
+            <div
+              key={notif.id}
+              className={`flex flex-col gap-2 rounded-2xl border p-4 transition-all ${
+                notif.isRead
+                  ? "border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900"
+                  : "border-emerald-100 bg-emerald-50/50 shadow-sm dark:border-emerald-800 dark:bg-emerald-900/10"
+              }`}
             >
               <p className="text-sm dark:text-white">
-                {notif.text || 
-                 (notif.type === 'like' ? 'أعجب بمنشورك ❤️' : 
-                  notif.type === 'follow' ? 'بدأ في متابعتك ✅' : 
-                  'تفاعل معك')}
+                {notif.text ||
+                  (notif.type === "like"
+                    ? "Someone liked your post."
+                    : notif.type === "follow"
+                    ? "Someone started following you."
+                    : "You have a new interaction.")}
               </p>
               <span className="text-[10px] text-slate-400">
-                {new Date(notif.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                {new Date(notif.created_at).toLocaleTimeString("ar-EG", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </span>
             </div>
           ))
