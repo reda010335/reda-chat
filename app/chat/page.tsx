@@ -1,40 +1,57 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 
 type User = { id: string; profileName: string; username: string; image?: string };
 
-export default function ChatListPage() {
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+export default function FriendsPage() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const router = useRouter();
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [friends, setFriends] = useState<User[]>([]);
+  const [meId, setMeId] = useState<string>("");
 
   useEffect(() => {
-    const fetchData = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return router.push("/signup");
+      if (!user) return router.push("/login");
 
-      const { data: users } = await supabase.from("User").select("*").not("id", "eq", user.id).order("profileName", { ascending: true });
-      setAllUsers(users || []);
+      setMeId(user.id);
+
+      // جلب كل المستخدمين عدا نفسك
+      const { data } = await supabase
+        .from("User")
+        .select("*")
+        .neq("id", user.id);
+
+      setFriends(data as User[]);
     };
-    fetchData();
-  }, []);
+
+    init();
+  }, [router, supabase]);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4" dir="rtl">
-      <h1 className="text-2xl font-black mb-6">المحادثات</h1>
-      <div className="space-y-3">
-        {allUsers.map(u => (
-          <div key={u.id} onClick={() => router.push(`/chat/${u.id}`)} className="bg-white p-4 rounded-xl flex items-center justify-between shadow-sm cursor-pointer hover:bg-emerald-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <img src={u.image || "/user.png"} className="w-12 h-12 rounded-full object-cover" />
-              <span className="font-bold text-slate-800">{u.profileName}</span>
+    <div className="p-4 bg-slate-50 dark:bg-slate-950 min-h-screen">
+      <h1 className="text-xl font-bold mb-4 text-slate-800 dark:text-white">الأصدقاء</h1>
+      <ul className="space-y-2">
+        {friends.map(friend => (
+          <li 
+            key={friend.id} 
+            className="flex items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+            onClick={() => router.push(`/chat/${friend.id}`)}
+          >
+            <img src={friend.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
+            <div className="flex flex-col">
+              <span className="font-semibold text-slate-800 dark:text-white">{friend.profileName}</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">@{friend.username}</span>
             </div>
-            <span className="text-xs text-emerald-600 font-bold">دردشة ←</span>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
