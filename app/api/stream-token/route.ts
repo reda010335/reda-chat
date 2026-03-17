@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { StreamChat } from "stream-chat";
 
-const serverClient = StreamChat.getInstance(process.env.STREAM_API_KEY!, process.env.STREAM_SECRET_KEY!);
+// استخدم secret key بتاع Stream من .env
+const STREAM_SECRET_KEY = process.env.STREAM_SECRET_KEY!;
 
 export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId missing" }, { status: 400 });
 
-  // توليد JWT Token للمستخدم
-  const token = serverClient.createToken(userId);
+  const payload = {
+    user_id: userId
+  };
 
-  return NextResponse.json({ token });
+  // نستخدم fetch لإنشاء Stream Token
+  const res = await fetch("https://video.stream-io-api.com/video/token", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${STREAM_SECRET_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+  return NextResponse.json(data);
 }

@@ -17,8 +17,8 @@ const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
 export default function VideoCallPage() {
   const params = useParams();
   const router = useRouter();
+  // لو id جاي كـ array ناخد اول عنصر
   const callId = Array.isArray(params?.id) ? params.id[0] : params?.id;
-
   const [client, setClient] = useState<StreamVideoClient | null>(null);
   const [call, setCall] = useState<any>(null);
 
@@ -31,18 +31,22 @@ export default function VideoCallPage() {
     if (!callId) return;
 
     const initCall = async () => {
+      // 1. جلب session من Supabase
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return router.push("/login");
 
+      // 2. جلب Stream Token من السيرفر
       const res = await fetch(`/api/stream-token?userId=${session.user.id}`);
       const { token } = await res.json();
 
+      // 3. إنشاء Stream Client
       const _client = new StreamVideoClient({
         apiKey,
         user: { id: session.user.id },
         token
       });
 
+      // 4. صلاحيات الكاميرا والمايكروفون
       try {
         await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       } catch {
@@ -50,6 +54,7 @@ export default function VideoCallPage() {
         return;
       }
 
+      // 5. الانضمام أو إنشاء المكالمة
       const _call = _client.call("default", callId);
       await _call.join({ create: true });
 
@@ -77,9 +82,7 @@ export default function VideoCallPage() {
     <StreamVideo client={client}>
       <StreamCall call={call}>
         <div className="h-screen bg-slate-900 relative">
-          {/* هذا الشكل الافتراضي بدون أي Component خارجي */}
           <SpeakerLayout />
-
           <div className="absolute bottom-10 left-0 right-0 flex justify-center">
             <CallControls onLeave={() => router.back()} />
           </div>
