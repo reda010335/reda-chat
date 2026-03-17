@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@stream-io/node-sdk": "^0.7.44",
+    "@stream-io/video-react-sdk": "^1.33.4",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "@tailwindcss/postcss": "^4.2.1",
