@@ -7,7 +7,10 @@ export async function POST(req: Request) {
     const { senderId, receiverId, text, type, mediaUrl, callId } = body;
 
     if (!senderId || !receiverId) {
-      return NextResponse.json({ error: "المرسل والمستقبل مطلوبان" }, { status: 400 });
+      return NextResponse.json(
+        { error: "المرسل والمستقبل مطلوبان" },
+        { status: 400 }
+      );
     }
 
     const newMessage = await prisma.message.create({
@@ -19,16 +22,14 @@ export async function POST(req: Request) {
         mediaUrl: mediaUrl || null,
         callId: callId || null,
       },
-      include: {
-        sender: {
-          select: { id: true, profileName: true, image: true },
-        },
-      },
     });
 
     return NextResponse.json(newMessage);
   } catch (err: any) {
-    console.error("❌ Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("Error sending message:", err);
+    return NextResponse.json(
+      { error: err.message || "حدث خطأ أثناء الإرسال" },
+      { status: 500 }
+    );
   }
 }

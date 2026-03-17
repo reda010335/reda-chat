@@ -16,21 +16,22 @@ model User {
   bio          String?
   createdAt    DateTime @default(now())
 
-  // العلاقات الاجتماعية
   posts        Post[]
   comments     Comment[]
   likes        Like[]
-  
-  // نظام الأصدقاء
-  sentRequests     FriendRequest[] @relation("sender")
+
+  sentRequests      FriendRequest[] @relation("sender")
   receivedRequests  FriendRequest[] @relation("receiver")
-  
+
   friends           Friendship[]    @relation("userFriends")
   friendOf          Friendship[]    @relation("friendOfUser")
 
-  // الدردشة (تم تعديل العلاقات لتتوافق مع الموديل الجديد)
-  sentMessages     Message[] @relation("sentMessages")
-  receivedMessages Message[] @relation("receivedMessages")
+  sentMessages      Message[]       @relation("sentMessages")
+  receivedMessages  Message[]       @relation("receivedMessages")
+
+  stories           Story[]
+  conversationsOne  Conversation[]  @relation("conversationUser1")
+  conversationsTwo  Conversation[]  @relation("conversationUser2")
 }
 
 model Post {
@@ -40,9 +41,17 @@ model Post {
   createdAt DateTime @default(now())
   authorId  String
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
+
   comments  Comment[]
   likes     Like[]
+}
+
+model Story {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  imageUrl  String
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
 model Comment {
@@ -56,11 +65,11 @@ model Comment {
 }
 
 model Like {
-  id     String @id @default(cuid())
-  postId String
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
 }
@@ -69,7 +78,7 @@ model FriendRequest {
   id         String   @id @default(cuid())
   senderId   String
   receiverId String
-  status     String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  status     String   @default("PENDING")
   createdAt  DateTime @default(now())
 
   sender     User     @relation("sender", fields: [senderId], references: [id])
@@ -86,16 +95,12 @@ model Friendship {
   @@unique([userId, friendId])
 }
 
-// الموديل المحدث للرسائل والمكالمات
-  
 model Message {
   id          String   @id @default(cuid())
   content     String
   createdAt   DateTime @default(now())
   senderId    String
   receiverId  String
-
-  // الحقول اللي مسببة المشكلة 👇
   type        String?  @default("text")
   callId      String?
   mediaUrl    String?
@@ -104,4 +109,16 @@ model Message {
 
   sender      User     @relation("sentMessages", fields: [senderId], references: [id])
   receiver    User     @relation("receivedMessages", fields: [receiverId], references: [id])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  user1Id   String
+  user2Id   String
+  createdAt DateTime @default(now())
+
+  user1     User     @relation("conversationUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User     @relation("conversationUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@unique([user1Id, user2Id])
 }

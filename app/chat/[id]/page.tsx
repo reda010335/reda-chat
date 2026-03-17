@@ -34,6 +34,7 @@ export default function ChatPage() {
   const [receiver, setReceiver] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export default function ChatPage() {
       const res = await fetch(
         `/api/messages?userId=${authUser.id}&receiverId=${receiverId}`
       );
+
       const msgs = res.ok ? ((await res.json()) as Message[]) : [];
 
       if (isMounted) {
@@ -95,6 +97,7 @@ export default function ChatPage() {
         { event: "INSERT", schema: "public", table: "Message" },
         (payload: { new: Message }) => {
           const msg = payload.new;
+
           const isCurrentChat =
             (msg.senderId === me.id && msg.receiverId === receiverId) ||
             (msg.senderId === receiverId && msg.receiverId === me.id);
@@ -104,8 +107,24 @@ export default function ChatPage() {
           }
 
           setMessages((prev) => {
-            if (prev.some((entry) => entry.id === msg.id)) {
-              return prev;
+            const exists = prev.some(
+              (entry) =>
+                entry.id === msg.id ||
+                (entry.content === msg.content &&
+                  entry.senderId === msg.senderId &&
+                  entry.receiverId === msg.receiverId &&
+                  entry.id.startsWith("temp-"))
+            );
+
+            if (exists) {
+              return prev.map((entry) =>
+                entry.id.startsWith("temp-") &&
+                entry.content === msg.content &&
+                entry.senderId === msg.senderId &&
+                entry.receiverId === msg.receiverId
+                  ? msg
+                  : entry
+              );
             }
 
             return [...prev, msg];
@@ -126,14 +145,16 @@ export default function ChatPage() {
   const sendMessage = async () => {
     const content = newMessage.trim();
 
-    if (!content || !me || !receiverId) {
+    if (!content || !me || !receiverId || sending) {
       return;
     }
 
+    setSending(true);
     setNewMessage("");
 
+    const tempId = `temp-${crypto.randomUUID()}`;
     const tempMessage: Message = {
-      id: crypto.randomUUID(),
+      id: tempId,
       content,
       senderId: me.id,
       receiverId,
@@ -143,28 +164,35 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, tempMessage]);
 
-    const res = await fetch("/api/messages/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        senderId: me.id,
-        receiverId,
-        text: content,
-      }),
-    });
+    try {
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          senderId: me.id,
+          receiverId,
+          text: content,
+        }),
+      });
 
-    if (!res.ok) {
-      setMessages((prev) => prev.filter((msg) => msg.id !== tempMessage.id));
-      console.error("Failed to send message");
-      return;
+      if (!res.ok) {
+        throw new Error("Failed to send message");
+      }
+
+      const savedMessage = (await res.json()) as Message;
+
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === tempId ? savedMessage : msg))
+      );
+    } catch (error) {
+      console.error(error);
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+      setNewMessage(content);
+    } finally {
+      setSending(false);
     }
-
-    const savedMessage = (await res.json()) as Message;
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === tempMessage.id ? savedMessage : msg))
-    );
   };
 
   return (
@@ -176,7 +204,7 @@ export default function ChatPage() {
             className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
             type="button"
           >
-            Back
+            رجوع
           </button>
 
           <button
@@ -234,15 +262,17 @@ export default function ChatPage() {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="Write a message..."
+              placeholder="اكتب رسالة..."
               className="flex-1 rounded-full bg-slate-100 px-5 py-3 text-sm outline-none transition focus:bg-white dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800"
+              disabled={sending}
             />
             <button
               onClick={sendMessage}
-              className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+              className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               type="button"
+              disabled={sending}
             >
-              Send
+              {sending ? "جارٍ..." : "إرسال"}
             </button>
           </div>
         </div>
