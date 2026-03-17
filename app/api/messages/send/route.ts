@@ -4,41 +4,41 @@ import { prisma } from "@/lib/prisma";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    // بناءً على السكيما: محتاجين المرسل والمستقبل والمحتوى
-    const { senderId, receiverId, text } = body;
+    const { senderId, receiverId, text, type, mediaUrl } = body;
 
-    // التأكد من وجود البيانات المطلوبة حسب السكيما
-    if (!senderId || !receiverId || !text?.trim()) {
-      return NextResponse.json(
-        { error: "بيانات الرسالة غير مكتملة. تأكد من وجود المرسل والمستقبل والنص." },
-        { status: 400 }
-      );
+    // تحقق من البيانات الأساسية
+    if (!senderId || !receiverId) {
+      return NextResponse.json({ error: "لازم المرسل والمستقبل" }, { status: 400 });
     }
 
-    // الإنشاء في جدول Message (بالمفرد)
+    if (!text?.trim() && !mediaUrl) {
+      return NextResponse.json({ error: "مفيش محتوى للرسالة" }, { status: 400 });
+    }
+
     const newMessage = await prisma.message.create({
       data: {
-        content: text.trim(),
-        senderId: senderId,   // UUID للمرسل
-        receiverId: receiverId, // UUID للمستقبل
+        senderId,
+        receiverId,
+        content: text?.trim() || "",
+        mediaUrl: mediaUrl || null, // رابط الصورة/الفيديو/الصوت
+        delivered: true,            // تم التسليم
+        seen: false,                // لم يتم رؤيته بعد
       },
       include: {
         sender: {
-          select: {
-            id: true,
-            username: true,
-            profileName: true,
-          },
+          select: { id: true, profileName: true, username: true, image: true },
         },
       },
     });
 
     return NextResponse.json(newMessage);
-  } catch (error: any) {
-    console.error("❌ خطأ في إرسال الرسالة:", error.message);
-    
+  } catch (err: any) {
+    console.error("❌ خطأ في إرسال الرسالة:", err);
+
     return NextResponse.json(
-      { error: "فشل الإرسال: " + (error.message.includes("foreign key") ? "المستخدم غير موجود" : error.message) },
+      {
+        error: "فشل الإرسال: " + (err.message.includes("foreign key") ? "المستخدم غير موجود" : err.message),
+      },
       { status: 500 }
     );
   }
