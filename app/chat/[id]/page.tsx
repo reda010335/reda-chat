@@ -18,6 +18,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // 1. تهيئة البيانات الأساسية
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -40,74 +41,101 @@ export default function ChatPage() {
     init();
   }, [receiverId]);
 
-  // نظام الاستقبال (Realtime) - معدل لاستقبال المكالمات
+  // 2. إصلاح الـ Realtime (للرسايل والمكالمات)
   useEffect(() => {
     if (!me || !receiverId) return;
-    const roomId = [me.id, receiverId].sort().join("_");
 
+    // قناة استماع عامة لكل التغييرات في جدول Message
     const channel = supabase
-      .channel(`room_${roomId}`)
+      .channel('chat_realtime') 
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "Message" }, (payload) => {
           const msg = payload.new as Message;
           
-          // استقبال المكالمة لو موجهة ليك
-          if (msg.type === "call" && msg.receiver_id === me.id) {
-             if (confirm(`مكالمة واردة من ${receiver?.profileName}.. رد؟`)) {
-                router.push(`/call/${msg.call_id}`);
-             }
-          }
+          // تأكد إن الرسالة تخص المحادثة دي (سواء أنا باعتها أو استلمتها)
+          const isRelevant = (msg.sender_id === me.id && msg.receiver_id === receiverId) || 
+                             (msg.sender_id === receiverId && msg.receiver_id === me.id);
 
-          if ((msg.sender_id === me.id && msg.receiver_id === receiverId) || (msg.sender_id === receiverId && msg.receiver_id === me.id)) {
-            setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+          if (isRelevant) {
+            // لو نوعها call والطرف التاني هو اللي رن
+            if (msg.type === "call" && msg.sender_id === receiverId) {
+                if (window.confirm(`مكالمة واردة من ${receiver?.profileName}.. هل تود الرد؟`)) {
+                   router.push(`/call/${msg.call_id}`);
+                }
+            }
+            // تحديث قائمة الرسائل فوراً
+            setMessages(prev => {
+                const exists = prev.find(m => m.id === msg.id);
+                if (exists) return prev;
+                return [...prev, msg];
+            });
           }
       }).subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [me, receiverId, receiver]);
 
-  // دالة بدء المكالمة
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // 3. دالة بدء المكالمة (صوت أو فيديو)
   const startCall = async (type: 'audio' | 'video') => {
     if (!me) return;
-    const callId = [me.id, receiverId].sort().join("_");
-    await supabase.from("Message").insert([{
+    const callId = crypto.randomUUID(); // معرف فريد للمكالمة
+
+    const { error } = await supabase.from("Message").insert([{
       content: `📞 بدأ مكالمة ${type === 'video' ? 'فيديو' : 'صوتية'}...`,
       sender_id: me.id,
       receiver_id: receiverId,
       type: "call",
       call_id: callId
     }]);
-    router.push(`/call/${callId}`);
+
+    if (!error) {
+      router.push(`/call/${callId}?type=${type}`);
+    }
   };
 
+  // 4. دالة إرسال الرسالة الكتابية (إصلاح عدم الظهور)
   const sendMessage = async () => {
     if (!newMessage.trim() || !me) return;
     const content = newMessage;
     setNewMessage("");
-    setMessages(prev => [...prev, { id: crypto.randomUUID(), content, sender_id: me.id, receiver_id: receiverId, createdAt: new Date().toISOString() }]);
-    await supabase.from("Message").insert([{ content, sender_id: me.id, receiver_id: receiverId, type: "text" }]);
+
+    const { error } = await supabase.from("Message").insert([{ 
+        content, 
+        sender_id: me.id, 
+        receiver_id: receiverId, 
+        type: "text" 
+    }]);
+
+    if (error) console.error("Send error:", error);
   };
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden" dir="rtl">
-      <header className="bg-white/90 dark:bg-slate-900/90 p-3 px-4 flex items-center justify-between border-b dark:border-slate-800 shadow-sm sticky top-0 z-10">
+      <header className="bg-white dark:bg-slate-900 p-3 px-4 flex items-center justify-between border-b dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-emerald-500 bg-slate-200">
-            {receiver?.image ? <img src={receiver.image} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-emerald-500 flex items-center justify-center text-white">?</div>}
+          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold">
+            {receiver?.profileName?.[0]}
           </div>
-          <h2 className="font-bold text-slate-800 dark:text-white text-sm">{receiver?.profileName}</h2>
+          <h2 className="font-bold text-slate-800 dark:text-white">{receiver?.profileName}</h2>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button onClick={() => startCall('audio')} className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">📞</button>
-          <button onClick={() => startCall('video')} className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">📹</button>
-          <button onClick={() => router.back()} className="text-xl px-2">🔙</button>
+        <div className="flex items-center gap-4">
+          <button onClick={() => startCall('audio')} className="text-xl">📞</button>
+          <button onClick={() => startCall('video')} className="text-xl">📹</button>
+          <button onClick={() => router.back()} className="text-xl">🔙</button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.sender_id === me?.id ? "justify-start flex-row-reverse" : "justify-start"}`}>
-            <div className={`max-w-[75%] p-3 px-4 rounded-[18px] text-sm ${msg.type === 'call' ? 'bg-amber-100 text-amber-900 mx-auto' : msg.sender_id === me?.id ? 'bg-emerald-600 text-white rounded-tr-none ml-2' : 'bg-white text-slate-800 border rounded-tl-none mr-2'}`}>
+            <div className={`max-w-[75%] p-3 px-4 rounded-[18px] text-sm ${
+                msg.type === 'call' ? 'bg-amber-100 text-amber-900 mx-auto' : 
+                msg.sender_id === me?.id ? 'bg-emerald-600 text-white rounded-tr-none ml-2' : 
+                'bg-white text-slate-800 border rounded-tl-none mr-2'
+            }`}>
               {msg.content}
             </div>
           </div>
@@ -116,8 +144,14 @@ export default function ChatPage() {
       </div>
 
       <div className="p-4 bg-white border-t flex gap-2">
-        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMessage()} placeholder="اكتب رسالة..." className="flex-1 bg-slate-100 p-2 px-4 rounded-full outline-none" />
-        <button onClick={sendMessage} className="bg-emerald-600 text-white w-10 h-10 rounded-full">📩</button>
+        <input 
+          value={newMessage} 
+          onChange={e => setNewMessage(e.target.value)} 
+          onKeyDown={e => e.key === "Enter" && sendMessage()} 
+          placeholder="اكتب رسالة..." 
+          className="flex-1 bg-slate-100 p-2 px-4 rounded-full outline-none" 
+        />
+        <button onClick={sendMessage} className="bg-emerald-600 text-white w-10 h-10 rounded-full flex items-center justify-center">📩</button>
       </div>
     </div>
   );
