@@ -18,43 +18,66 @@ export default function ChatListPage() {
   const router = useRouter();
 
   const [me, setMe] = useState<User | null>(null);
-  const [friends, setFriends] = useState<User[]>([]);
+  const [chatUsers, setChatUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
 
-  // جلب بيانات المستخدم الحالي
   useEffect(() => {
-    const fetchMe = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return router.push("/signup");
 
-      const meUser: User = {
+      setMe({
         id: user.id,
-        username: (user as any).username || "",
         profileName: (user as any).profileName || "",
+        username: (user as any).username || "",
         image: (user as any).image || "",
-      };
-      setMe(meUser);
-      fetchFriends(meUser.id);
+      });
+
+      fetchChatUsers(user.id);
     };
-    fetchMe();
+    init();
   }, []);
 
-  // جلب كل الأصدقاء
-  const fetchFriends = async (myId: string) => {
-    const { data: requests } = await supabase
+  // جلب المستخدمين اللي لهم علاقة معايا (Friend أو Follow)
+  const fetchChatUsers = async (myId: string) => {
+    const { data: friends } = await supabase
       .from("Friend Request")
-      .select("*, sender:User!FriendRequest_senderId_fkey(*), receiver:User!FriendRequest_receiverId_fkey(*)")
+      .select(`
+        sender:User!FriendRequest_senderId_fkey(*),
+        receiver:User!FriendRequest_receiverId_fkey(*),
+        status
+      `)
       .or(`and(senderId.eq.${myId},status.eq.accepted),and(receiverId.eq.${myId},status.eq.accepted)`);
 
-    if (!requests) return;
+    const { data: follows } = await supabase
+      .from("Follow")
+      .select("follower_id, following_id, user:following_id(*)")
+      .or(`and(follower_id.eq.${myId}),and(following_id.eq.${myId})`);
 
-    const friendsList: User[] = requests.map((r: any) => r.senderId === myId ? r.receiver : r.sender);
-    setFriends(friendsList);
+    const usersSet: User[] = [];
+
+    // أصدقاء
+    if (friends) {
+      friends.forEach((r: any) => {
+        const u = r.sender.id === myId ? r.receiver : r.sender;
+        if (!usersSet.find(user => user.id === u.id)) usersSet.push(u);
+      });
+    }
+
+    // متابعين / متابعة متبادلة
+    if (follows) {
+      follows.forEach((f: any) => {
+        const u = f.user;
+        if (!usersSet.find(user => user.id === u.id) && u.id !== myId) usersSet.push(u);
+      });
+    }
+
+    setChatUsers(usersSet);
   };
 
-  // البحث عن مستخدمين جدد
   const searchUsers = async () => {
     if (!searchTerm.trim() || !me) return;
     setLoading(true);
@@ -75,7 +98,7 @@ export default function ChatListPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 pb-32" dir="rtl">
-      <h1 className="text-2xl font-black mb-4">المحادثات والأصدقاء</h1>
+      <h1 className="text-2xl font-black mb-4">المحادثات</h1>
 
       {/* بحث */}
       <div className="flex gap-2 mb-6">
@@ -84,44 +107,20 @@ export default function ChatListPage() {
           className="flex-1 p-4 rounded-2xl border-none shadow-sm outline-none focus:ring-2 ring-emerald-500 text-sm"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
+          onFocus={() => setSearchActive(true)}
           onKeyDown={e => e.key === "Enter" && searchUsers()}
         />
         <button
           onClick={searchUsers}
           className="bg-emerald-600 text-white px-6 rounded-2xl font-bold"
-          disabled={loading}
+          disabled={loading || !searchActive}
         >
           {loading ? "جار البحث..." : "بحث"}
         </button>
       </div>
 
-      {/* قائمة الأصدقاء تظهر دائمًا */}
-      <div className="mb-6">
-        <h2 className="font-bold mb-2 text-slate-700">أصدقائي</h2>
-        {friends.length === 0 ? (
-          <p className="text-slate-400 text-sm">لا يوجد أصدقاء بعد</p>
-        ) : (
-          <div className="space-y-3">
-            {friends.map(f => (
-              <div key={f.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/chat/${f.id}`)}>
-                  <img src={f.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
-                  <span className="font-bold">{f.profileName}</span>
-                </div>
-                <button
-                  onClick={() => router.push(`/chat/${f.id}`)}
-                  className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-bold text-xs"
-                >
-                  دردشة
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* نتائج البحث */}
-      {searchResults.length > 0 && (
+      {searchActive && searchResults.length > 0 && (
         <div className="mb-6">
           <h2 className="font-bold mb-2 text-slate-700">نتائج البحث</h2>
           <div className="space-y-3">
@@ -142,6 +141,31 @@ export default function ChatListPage() {
           </div>
         </div>
       )}
+
+      {/* قائمة الدردشة */}
+      <div>
+        <h2 className="font-bold mb-2 text-slate-700">أصدقائي والمتابعين</h2>
+        {chatUsers.length === 0 ? (
+          <p className="text-slate-400 text-sm">لا يوجد أشخاص متاحين للدردشة</p>
+        ) : (
+          <div className="space-y-3">
+            {chatUsers.map(f => (
+              <div key={f.id} className="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/chat/${f.id}`)}>
+                  <img src={f.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
+                  <span className="font-bold">{f.profileName}</span>
+                </div>
+                <button
+                  onClick={() => router.push(`/chat/${f.id}`)}
+                  className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-bold text-xs"
+                >
+                  دردشة
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
