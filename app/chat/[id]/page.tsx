@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter, useParams } from "next/navigation";
@@ -20,9 +21,10 @@ export default function ChatPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
   const router = useRouter();
-  const params = useParams();
-  const receiverId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const { id: receiverIdParam } = useParams();
+  const receiverId = Array.isArray(receiverIdParam) ? receiverIdParam[0] : receiverIdParam;
 
   const [me, setMe] = useState<User | null>(null);
   const [receiver, setReceiver] = useState<User | null>(null);
@@ -32,36 +34,44 @@ export default function ChatPage() {
 
   // جلب بيانات المستخدمين والرسائل
   useEffect(() => {
+    if (!receiverId) return;
+
     const init = async () => {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return router.push("/signup");
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) return router.push("/signup");
 
-      const { data: myData } = await supabase.from("User").select("*").eq("id", authUser.id).single();
-      if (myData) setMe(myData as User);
+        const { data: myData } = await supabase.from("User").select("*").eq("id", authUser.id).single();
+        setMe(myData as User);
 
-      const { data: rec } = await supabase.from("User").select("*").eq("id", receiverId).maybeSingle();
-      setReceiver(rec as User | null);
+        const { data: rec } = await supabase.from("User").select("*").eq("id", receiverId).maybeSingle();
+        setReceiver(rec as User | null);
 
-      const res = await fetch("/api/messages/get", { 
-        method: "POST", 
-        body: JSON.stringify({ userId: authUser.id, friendId: receiverId }) 
-      });
-      const msgs: Message[] = await res.json();
-      setMessages(msgs);
+        const res = await fetch("/api/messages/get", { 
+          method: "POST", 
+          body: JSON.stringify({ userId: authUser.id, friendId: receiverId }) 
+        });
+        const msgs: Message[] = await res.json();
+        setMessages(msgs);
+      } catch (err) {
+        console.error(err);
+      }
     };
+
     init();
   }, [receiverId, router, supabase]);
 
   // استقبال الرسائل realtime
   useEffect(() => {
-    if (!me) return;
+    if (!me || !receiverId) return;
+
     const channel = supabase
       .channel(`chat_${receiverId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "Message" }, (payload: any) => {
         const msg = payload.new as Message;
         if ((msg.senderId === me.id && msg.receiverId === receiverId) || 
             (msg.senderId === receiverId && msg.receiverId === me.id)) {
-          if (msg.type === "call" && msg.senderId === receiverId) {
+          if (msg.type === "call" && msg.senderId === receiverId && msg.callId) {
             if (window.confirm(`مكالمة واردة من ${receiver?.profileName}.. هل تود الرد؟`)) {
               router.push(`/call/${msg.callId}`);
             }
@@ -70,40 +80,41 @@ export default function ChatPage() {
         }
       }).subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [me, receiverId, receiver, supabase, router]);
 
-  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const sendMessage = async (type = "text", callId: string | null = null) => {
+  const sendMessage = async (type: string = "text", callId: string | null = null) => {
+    if (!me || !receiverId) return;
+
     const isCall = type === "audio" || type === "video";
-    const content = isCall ? `📞 مكالمة ${type === 'video' ? 'فيديو' : 'صوتية'}` : newMessage;
-    
-    if (!isCall && !content.trim()) return;
-    if (!me) return;
+    const content = isCall ? `📞 مكالمة ${type === "video" ? "فيديو" : "صوتية"}` : newMessage;
 
+    if (!isCall && !content.trim()) return;
     if (!isCall) setNewMessage("");
 
     await fetch("/api/messages/send", {
       method: "POST",
-      body: JSON.stringify({ 
-        senderId: me.id, 
-        receiverId, 
-        text: content, 
+      body: JSON.stringify({
+        senderId: me.id,
+        receiverId,
+        text: content,
         type,
         callId
       })
     });
 
-    if (isCall && callId) {
-      router.push(`/call/${callId}?type=${type}`);
-    }
+    if (isCall && callId) router.push(`/call/${callId}?type=${type}`);
   };
-
-  if (!receiverId) return <div>Call ID غير موجود</div>;
 
   return (
     <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden" dir="rtl">
+      {/* Header */}
       <header className="bg-white dark:bg-slate-900 p-3 px-4 flex items-center justify-between border-b dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/profile/${receiverId}`)}>
           <img src={receiver?.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" />
@@ -119,6 +130,7 @@ export default function ChatPage() {
         </div>
       </header>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, index) => {
           const isMine = msg.senderId === me?.id;
@@ -130,9 +142,7 @@ export default function ChatPage() {
               }`}>
                 {msg.type === "image" && msg.mediaUrl ? (
                   <img src={msg.mediaUrl} className="rounded-xl max-w-full" alt="sent" />
-                ) : (
-                  msg.content
-                )}
+                ) : msg.content}
               </div>
             </div>
           );
@@ -140,6 +150,7 @@ export default function ChatPage() {
         <div ref={scrollRef} />
       </div>
 
+      {/* Input */}
       <div className="p-4 bg-white dark:bg-slate-900 border-t dark:border-slate-800 flex gap-2">
         <input
           value={newMessage}
