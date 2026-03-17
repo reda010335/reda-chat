@@ -8,38 +8,38 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  username      String    @unique
-  profileName   String
-  password      String
-  image         String?   @default("https://via.placeholder.com/150")
-  bio           String?
-  createdAt     DateTime  @default(now())
+  id           String   @id @default(cuid())
+  username     String   @unique
+  profileName  String
+  password     String
+  image        String?  @default("https://via.placeholder.com/150")
+  bio          String?
+  createdAt    DateTime @default(now())
 
-  // العلاقات
-  posts         Post[]
-  comments      Comment[]
-  likes         Like[]
+  // العلاقات الاجتماعية
+  posts        Post[]
+  comments     Comment[]
+  likes        Like[]
   
   // نظام الأصدقاء
   sentRequests     FriendRequest[] @relation("sender")
   receivedRequests  FriendRequest[] @relation("receiver")
   
-  friends          Friendship[]    @relation("userFriends")
-  friendOf         Friendship[]    @relation("friendOfUser")
+  friends           Friendship[]    @relation("userFriends")
+  friendOf          Friendship[]    @relation("friendOfUser")
 
-  // الدردشة
-  sentMessages     Message[] @relation("sender")
-  receivedMessages  Message[] @relation("receiver")
+  // الدردشة (تم تعديل العلاقات لتتوافق مع الموديل الجديد)
+  sentMessages     Message[] @relation("sentMessages")
+  receivedMessages Message[] @relation("receivedMessages")
 }
 
 model Post {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   content   String
   image     String?
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
   authorId  String
-  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   
   comments  Comment[]
   likes     Like[]
@@ -77,23 +77,31 @@ model FriendRequest {
 }
 
 model Friendship {
-  id        String @id @default(cuid())
-  userId    String
-  friendId  String
-  user      User   @relation("userFriends", fields: [userId], references: [id])
-  friend    User   @relation("friendOfUser", fields: [friendId], references: [id])
+  id       String @id @default(cuid())
+  userId   String
+  friendId String
+  user     User   @relation("userFriends", fields: [userId], references: [id])
+  friend   User   @relation("friendOfUser", fields: [friendId], references: [id])
 
   @@unique([userId, friendId])
 }
 
+// الموديل المحدث للرسائل والمكالمات
+  
 model Message {
-  id         String   @id @default(cuid())
-  content    String
-  image      String?
-  createdAt  DateTime @default(now())
-  senderId   String
-  receiverId String
+  id          String   @id @default(cuid())
+  content     String
+  createdAt   DateTime @default(now())
+  senderId    String
+  receiverId  String
 
-  sender     User     @relation("sender", fields: [senderId], references: [id])
-  receiver   User     @relation("receiver", fields: [receiverId], references: [id])
+  // الحقول اللي مسببة المشكلة 👇
+  type        String?  @default("text")
+  callId      String?
+  mediaUrl    String?
+  delivered   Boolean  @default(true)
+  seen        Boolean  @default(false)
+
+  sender      User     @relation("sentMessages", fields: [senderId], references: [id])
+  receiver    User     @relation("receivedMessages", fields: [receiverId], references: [id])
 }

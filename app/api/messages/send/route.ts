@@ -17,6 +17,7 @@ export async function POST(req: Request) {
         senderId,
         receiverId,
         content: text?.trim() || "",
+        type: type || "text",
         mediaUrl: mediaUrl || null,
         callId: callId || null,
         delivered: true,
