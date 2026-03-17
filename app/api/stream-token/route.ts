@@ -1,23 +1,14 @@
-import { StreamClient } from "@stream-io/node-sdk";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { StreamChat } from "stream-chat";
 
-export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+const serverClient = StreamChat.getInstance(process.env.STREAM_API_KEY!, process.env.STREAM_SECRET_KEY!);
 
-    if (!userId) return NextResponse.json({ error: "User ID is required" }, { status: 400 });
+export async function GET(req: NextRequest) {
+  const userId = req.nextUrl.searchParams.get("userId");
+  if (!userId) return NextResponse.json({ error: "userId missing" }, { status: 400 });
 
-    const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
-    const secret = process.env.STREAM_SECRET_KEY!;
+  // توليد JWT Token للمستخدم
+  const token = serverClient.createToken(userId);
 
-    const client = new StreamClient(apiKey, secret);
-
-    // إنشاء التوكن للمستخدم
-    const token = client.createToken(userId);
-
-    return NextResponse.json({ token });
-  } catch (error) {
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
-  }
+  return NextResponse.json({ token });
 }

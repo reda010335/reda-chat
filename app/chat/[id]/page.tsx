@@ -3,7 +3,6 @@ import { useEffect, useState, useRef } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter, useParams } from "next/navigation";
 
-// أنواع المستخدم والرسائل
 type User = { id: string; profileName: string; username: string; image?: string };
 type Message = { 
   id: string; 
@@ -30,7 +29,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // جلب بياناتي وبيانات المستقبل
+  // جلب بيانات المستخدمين والرسائل
   useEffect(() => {
     const init = async () => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -61,7 +60,6 @@ export default function ChatPage() {
         const msg = payload.new as Message;
         if ((msg.senderId === me.id && msg.receiverId === receiverId) || 
             (msg.senderId === receiverId && msg.receiverId === me.id)) {
-          
           // مكالمات واردة
           if (msg.type === "call" && msg.senderId === receiverId) {
             if (window.confirm(`مكالمة واردة من ${receiver?.profileName}.. هل تود الرد؟`)) {
@@ -75,10 +73,8 @@ export default function ChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [me, receiverId, receiver, supabase, router]);
 
-  // scroll تلقائي للرسائل
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // دالة الإرسال مع تحسين الأنواع
   const sendMessage = async (type = "text", callId: string | null = null) => {
     const isCall = type === "audio" || type === "video";
     const content = isCall ? `📞 مكالمة ${type === 'video' ? 'فيديو' : 'صوتية'}` : newMessage;
