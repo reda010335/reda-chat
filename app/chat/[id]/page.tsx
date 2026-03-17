@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useParams, useRouter } from "next/navigation";
 
-type User = { id: string; profileName: string; username: string; image?: string };
+type User = {
+  id: string;
+  profileName: string;
+  username: string;
+  image?: string;
+};
 
 type Message = {
   id: string;
@@ -27,8 +32,11 @@ export default function ChatPage() {
   const supabase = supabaseRef.current;
 
   const router = useRouter();
-  const { id: receiverIdParam } = useParams();
-  const receiverId = Array.isArray(receiverIdParam) ? receiverIdParam[0] : receiverIdParam;
+  const params = useParams();
+  const receiverIdParam = params.id;
+  const receiverId = Array.isArray(receiverIdParam)
+    ? receiverIdParam[0]
+    : receiverIdParam;
 
   const [me, setMe] = useState<User | null>(null);
   const [receiver, setReceiver] = useState<User | null>(null);
@@ -47,25 +55,28 @@ export default function ChatPage() {
         return;
       }
 
-      const { data: myData } = await supabase.from("User").select("*").eq("id", authUser.id).single();
+      const { data: myData } = await supabase
+        .from("User")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
+
       if (myData) setMe(myData as User);
 
-      const { data: rec } = await supabase.from("User").select("*").eq("id", receiverId).maybeSingle();
+      const { data: rec } = await supabase
+        .from("User")
+        .select("*")
+        .eq("id", receiverId)
+        .maybeSingle();
+
       setReceiver(rec as User | null);
 
-      const res = await fetch("/api/messages/get", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: authUser.id,
-          friendId: receiverId,
-        }),
-      });
+      const res = await fetch(
+        `/api/messages?userId=${authUser.id}&receiverId=${receiverId}`
+      );
 
       if (!res.ok) {
-        console.error("Failed to load messages");
+        console.error("فشل في جلب الرسائل");
         return;
       }
 
@@ -73,7 +84,9 @@ export default function ChatPage() {
       setMessages(msgs);
     };
 
-    if (receiverId) init();
+    if (receiverId) {
+      init();
+    }
   }, [receiverId, router, supabase]);
 
   useEffect(() => {
@@ -87,19 +100,26 @@ export default function ChatPage() {
         (payload: any) => {
           const msg = payload.new as Message;
 
-          const isThisChat =
+          const isCurrentChat =
             (msg.senderId === me.id && msg.receiverId === receiverId) ||
             (msg.senderId === receiverId && msg.receiverId === me.id);
 
-          if (!isThisChat) return;
+          if (!isCurrentChat) return;
 
           setMessages((prev) => {
             const exists = prev.some((m) => m.id === msg.id);
             return exists ? prev : [...prev, msg];
           });
 
-          if ((msg.type === "audio" || msg.type === "video") && msg.senderId === receiverId) {
-            if (window.confirm(`مكالمة واردة من ${receiver?.profileName}.. هل تريد الرد؟`)) {
+          if (
+            (msg.type === "audio" || msg.type === "video") &&
+            msg.senderId === receiverId
+          ) {
+            if (
+              window.confirm(
+                `مكالمة واردة من ${receiver?.profileName || "مستخدم"}.. هل تريد الرد؟`
+              )
+            ) {
               router.push(`/call/${msg.callId}`);
             }
           }
@@ -118,23 +138,13 @@ export default function ChatPage() {
 
   const sendMessage = async (type = "text", callId: string | null = null) => {
     const isCall = type === "audio" || type === "video";
-    const content = isCall ? `مكالمة ${type === "video" ? "فيديو" : "صوتية"}` : newMessage.trim();
+    const content = isCall
+      ? `مكالمة ${type === "video" ? "فيديو" : "صوتية"}`
+      : newMessage.trim();
 
     if (!content || !me) return;
 
     if (!isCall) setNewMessage("");
-
-    const tempMessage: Message = {
-      id: crypto.randomUUID(),
-      content,
-      senderId: me.id,
-      receiverId: receiverId as string,
-      type,
-      callId: callId ?? undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, tempMessage]);
 
     const res = await fetch("/api/messages/send", {
       method: "POST",
@@ -144,15 +154,23 @@ export default function ChatPage() {
       body: JSON.stringify({
         senderId: me.id,
         receiverId,
-        content,
+        text: content,
         type,
         callId,
       }),
     });
 
     if (!res.ok) {
-      console.error("Failed to send message");
+      console.error("فشل في إرسال الرسالة");
+      return;
     }
+
+    const savedMessage: Message = await res.json();
+
+    setMessages((prev) => {
+      const exists = prev.some((m) => m.id === savedMessage.id);
+      return exists ? prev : [...prev, savedMessage];
+    });
 
     if (isCall && callId) {
       router.push(`/call/${callId}?type=${type}`);
@@ -160,32 +178,60 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden" dir="rtl">
+    <div
+      className="flex flex-col h-[100dvh] bg-slate-50 dark:bg-slate-950 overflow-hidden"
+      dir="rtl"
+    >
       <header className="bg-white dark:bg-slate-900 p-3 px-4 flex items-center justify-between border-b dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push(`/profile/${receiverId}`)}>
-          <img src={receiver?.image || "/user.png"} className="w-10 h-10 rounded-full object-cover" alt="user" />
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => router.push(`/profile/${receiverId}`)}
+        >
+          <img
+            src={receiver?.image || "/user.png"}
+            className="w-10 h-10 rounded-full object-cover"
+            alt="user"
+          />
           <div className="flex flex-col">
-            <h2 className="font-bold text-slate-800 dark:text-white">{receiver?.profileName}</h2>
+            <h2 className="font-bold text-slate-800 dark:text-white">
+              {receiver?.profileName || "مستخدم"}
+            </h2>
             <span className="text-[12px] text-emerald-500">Online</span>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <button onClick={() => sendMessage("audio", crypto.randomUUID())} className="text-xl">📞</button>
-          <button onClick={() => sendMessage("video", crypto.randomUUID())} className="text-xl">📹</button>
-          <button onClick={() => router.back()} className="text-xl">🔙</button>
+          <button
+            onClick={() => sendMessage("audio", crypto.randomUUID())}
+            className="text-xl"
+          >
+            📞
+          </button>
+          <button
+            onClick={() => sendMessage("video", crypto.randomUUID())}
+            className="text-xl"
+          >
+            📹
+          </button>
+          <button onClick={() => router.back()} className="text-xl">
+            🔙
+          </button>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, index) => {
           const isMine = msg.senderId === me?.id;
+          const isCall = msg.type === "audio" || msg.type === "video";
 
           return (
-            <div key={msg.id || index} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+            <div
+              key={msg.id || index}
+              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+            >
               <div
                 className={`max-w-[75%] p-3 px-4 rounded-[18px] text-sm ${
-                  msg.type === "audio" || msg.type === "video"
+                  isCall
                     ? "bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100 mx-auto border"
                     : isMine
                     ? "bg-emerald-600 text-white rounded-tr-none"
@@ -193,7 +239,11 @@ export default function ChatPage() {
                 }`}
               >
                 {msg.type === "image" && msg.mediaUrl ? (
-                  <img src={msg.mediaUrl} className="rounded-xl max-w-full" alt="sent" />
+                  <img
+                    src={msg.mediaUrl}
+                    className="rounded-xl max-w-full"
+                    alt="sent"
+                  />
                 ) : (
                   msg.content
                 )}
