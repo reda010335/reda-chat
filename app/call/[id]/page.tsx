@@ -1,360 +1,126 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Call,
+  CallControls,
+  SpeakerLayout,
+  StreamCall,
+  StreamVideo,
+  StreamVideoClient,
+} from "@stream-io/video-react-sdk";
+import "@stream-io/video-react-sdk/dist/css/styles.css";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-type User = {
-  id: string;
-  profileName: string;
-  username: string;
-  image?: string | null;
-};
+const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
 
-type Message = {
-  id: string;
-  content: string;
-  senderId: string;
-  receiverId: string;
-  type?: string | null;
-  mediaUrl?: string | null;
-  callId?: string | null;
-  createdAt: string;
-};
-
-const normalizeCallType = (value?: string | null): "audio" | "video" =>
-  value === "audio" ? "audio" : "video";
-
-export default function ChatPage() {
-  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+export default function VideoCallPage() {
+  const params = useParams();
   const router = useRouter();
-  const { id: receiverIdParam } = useParams();
-  const receiverId = Array.isArray(receiverIdParam)
-    ? receiverIdParam[0]
-    : receiverIdParam;
+  const searchParams = useSearchParams();
+  const callId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const callType = searchParams.get("type") === "audio" ? "audio" : "video";
 
-  const [me, setMe] = useState<User | null>(null);
-  const [receiver, setReceiver] = useState<User | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [sending, setSending] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [client, setClient] = useState<StreamVideoClient | null>(null);
+  const [call, setCall] = useState<Call | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    if (!callId) {
+      return;
+    }
 
-    const init = async () => {
+    let mounted = true;
+    let activeClient: StreamVideoClient | null = null;
+    let activeCall: Call | null = null;
+
+    const initCall = async () => {
       const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (!authUser) {
+      if (!session) {
         router.push("/signup");
         return;
       }
 
-      const [{ data: myData }, { data: receiverData }] = await Promise.all([
-        supabase
-          .from("User")
-          .select("id, profileName, username, image")
-          .eq("id", authUser.id)
-          .single(),
-        supabase
-          .from("User")
-          .select("id, profileName, username, image")
-          .eq("id", receiverId)
-          .maybeSingle(),
-      ]);
+      const res = await fetch(`/api/stream-token?userId=${session.user.id}`);
+      const { token } = await res.json();
 
-      const res = await fetch(
-        `/api/messages?userId=${authUser.id}&receiverId=${receiverId}`
-      );
-
-      const msgs = res.ok ? ((await res.json()) as Message[]) : [];
-
-      if (isMounted) {
-        setMe((myData as User) || null);
-        setReceiver((receiverData as User) || null);
-        setMessages(msgs);
-      }
-    };
-
-    if (receiverId) {
-      init();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [receiverId, router, supabase]);
-
-  useEffect(() => {
-    if (!me || !receiverId) {
-      return;
-    }
-
-    const channel = supabase
-      .channel(`chat:${me.id}:${receiverId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "Message" },
-        (payload: { new: Message }) => {
-          const msg = payload.new;
-
-          const isCurrentChat =
-            (msg.senderId === me.id && msg.receiverId === receiverId) ||
-            (msg.senderId === receiverId && msg.receiverId === me.id);
-
-          if (!isCurrentChat) {
-            return;
-          }
-
-          setMessages((prev) => {
-            const exists = prev.some(
-              (entry) =>
-                entry.id === msg.id ||
-                (entry.content === msg.content &&
-                  entry.senderId === msg.senderId &&
-                  entry.receiverId === msg.receiverId &&
-                  entry.id.startsWith("temp-"))
-            );
-
-            if (exists) {
-              return prev.map((entry) =>
-                entry.id.startsWith("temp-") &&
-                entry.content === msg.content &&
-                entry.senderId === msg.senderId &&
-                entry.receiverId === msg.receiverId
-                  ? msg
-                  : entry
-              );
-            }
-
-            return [...prev, msg];
-          });
-
-          if (
-            (msg.type === "audio" || msg.type === "video") &&
-            msg.senderId === receiverId &&
-            msg.callId
-          ) {
-            const accepted = window.confirm(
-              `${receiver?.profileName || "مستخدم"} يتصل بك. هل تريد الرد؟`
-            );
-
-            if (accepted) {
-              router.push(
-                `/call/${msg.callId}?type=${normalizeCallType(msg.type)}`
-              );
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [me, receiverId, receiver, router, supabase]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const sendMessage = async (
-    type: "text" | "audio" | "video" = "text",
-    callId?: string
-  ) => {
-    const isCall = type === "audio" || type === "video";
-    const content = isCall
-      ? type === "audio"
-        ? "مكالمة صوتية"
-        : "مكالمة فيديو"
-      : newMessage.trim();
-
-    if (!content || !me || !receiverId || sending) {
-      return;
-    }
-
-    setSending(true);
-    if (!isCall) {
-      setNewMessage("");
-    }
-
-    const tempId = `temp-${crypto.randomUUID()}`;
-    const tempMessage: Message = {
-      id: tempId,
-      content,
-      senderId: me.id,
-      receiverId,
-      type,
-      callId: callId || null,
-      createdAt: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, tempMessage]);
-
-    try {
-      const res = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          senderId: me.id,
-          receiverId,
-          text: content,
-          type,
-          callId: callId || null,
-        }),
+      activeClient = new StreamVideoClient({
+        apiKey,
+        user: { id: session.user.id },
+        token,
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to send message");
-      }
-
-      const savedMessage = (await res.json()) as Message;
-
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === tempId ? savedMessage : msg))
-      );
-
-      if (isCall && savedMessage.callId) {
-        router.push(
-          `/call/${savedMessage.callId}?type=${normalizeCallType(savedMessage.type)}`
+      try {
+        await navigator.mediaDevices.getUserMedia({
+          video: callType === "video",
+          audio: true,
+        });
+      } catch {
+        alert(
+          callType === "audio"
+            ? "Please enable microphone access."
+            : "Please enable camera and microphone access."
         );
+        return;
       }
-    } catch (error) {
-      console.error(error);
-      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
-      if (!isCall) {
-        setNewMessage(content);
-      }
-    } finally {
-      setSending(false);
-    }
-  };
 
-  const startCall = (type: "audio" | "video") => {
-    const callId = crypto.randomUUID();
-    sendMessage(type, callId);
-  };
+      activeCall = activeClient.call("default", callId);
+      await activeCall.join({ create: true });
+      if (callType === "audio") {
+        await activeCall.camera.disable();
+      }
+
+      if (!mounted) {
+        await activeCall.leave();
+        await activeClient.disconnectUser();
+        return;
+      }
+
+      setClient(activeClient);
+      setCall(activeCall);
+    };
+
+    initCall();
+
+    return () => {
+      mounted = false;
+
+      if (activeCall) {
+        void activeCall.leave();
+      }
+
+      if (activeClient) {
+        void activeClient.disconnectUser();
+      }
+    };
+  }, [callId, callType, router, supabase]);
+
+  if (!callId) {
+    return <div className="p-10 text-center">Call ID is missing.</div>;
+  }
+
+  if (!client || !call) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-lg font-bold text-white">
+        Opening {callType === "audio" ? "audio call" : "camera"}...
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden" dir="rtl">
-      <header className="border-b border-white/60 bg-white/85 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/85">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <button
-            onClick={() => router.back()}
-            className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
-            type="button"
-          >
-            رجوع
-          </button>
-
-          <button
-            onClick={() => router.push(`/profile/${receiverId}`)}
-            className="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-slate-100 dark:hover:bg-slate-800"
-            type="button"
-          >
-            <img
-              src={receiver?.image || "/user.png"}
-              alt={receiver?.profileName || "User"}
-              className="h-11 w-11 rounded-full object-cover"
-            />
-            <div className="text-right">
-              <h1 className="font-bold text-slate-900 dark:text-white">
-                {receiver?.profileName || "User"}
-              </h1>
-              <p className="text-xs text-emerald-600">
-                @{receiver?.username || "chat"}
-              </p>
-            </div>
-          </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => startCall("audio")}
-              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
-              type="button"
-            >
-              📞
-            </button>
-
-            <button
-              onClick={() => startCall("video")}
-              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
-              type="button"
-            >
-              📹
-            </button>
+    <StreamVideo client={client}>
+      <StreamCall call={call}>
+        <div className="relative h-screen bg-slate-900">
+          <SpeakerLayout />
+          <div className="absolute bottom-10 left-0 right-0 flex justify-center">
+            <CallControls onLeave={() => router.back()} />
           </div>
         </div>
-      </header>
-
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-4 py-5">
-          <div className="space-y-4">
-            {messages.map((msg) => {
-              const isMine = msg.senderId === me?.id;
-              const isCall = msg.type === "audio" || msg.type === "video";
-
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex ${isMine ? "justify-start" : "justify-end"}`}
-                >
-                  {isCall && msg.callId ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(
-                          `/call/${msg.callId}?type=${normalizeCallType(msg.type)}`
-                        )
-                      }
-                      className="max-w-[78%] cursor-pointer rounded-[22px] bg-amber-100 px-4 py-3 text-sm leading-7 text-amber-800 shadow-sm transition hover:opacity-90 dark:bg-amber-900/30 dark:text-amber-200"
-                    >
-                      {msg.content}
-                    </button>
-                  ) : (
-                    <div
-                      className={`max-w-[78%] rounded-[22px] px-4 py-3 text-sm leading-7 shadow-sm ${
-                        isMine
-                          ? "rounded-br-md bg-emerald-600 text-white"
-                          : "rounded-bl-md border border-white/70 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
-                      }`}
-                    >
-                      {msg.content}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <div ref={scrollRef} />
-          </div>
-        </div>
-
-        <div className="border-t border-white/60 bg-white/85 p-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/85">
-          <div className="mx-auto flex max-w-3xl gap-3">
-            <input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder="اكتب رسالة..."
-              className="flex-1 rounded-full bg-slate-100 px-5 py-3 text-sm outline-none transition focus:bg-white dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800"
-              disabled={sending}
-            />
-            <button
-              onClick={() => sendMessage()}
-              className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              type="button"
-              disabled={sending}
-            >
-              {sending ? "جارٍ..." : "إرسال"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+      </StreamCall>
+    </StreamVideo>
   );
-                  }
+}
