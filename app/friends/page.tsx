@@ -20,6 +20,7 @@ export default function FriendsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"friends" | "discover" | "all">("all");
 
   useEffect(() => {
     let isMounted = true;
@@ -107,7 +108,44 @@ export default function FriendsPage() {
         />
       </div>
 
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setViewMode("friends")}
+          className={`rounded-full px-4 py-2 text-sm font-bold ${
+            viewMode === "friends"
+              ? "bg-emerald-600 text-white"
+              : "bg-white text-slate-700 dark:bg-slate-900 dark:text-white"
+          }`}
+        >
+          👥 الأصدقاء الحاليين
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("discover")}
+          className={`rounded-full px-4 py-2 text-sm font-bold ${
+            viewMode === "discover"
+              ? "bg-emerald-600 text-white"
+              : "bg-white text-slate-700 dark:bg-slate-900 dark:text-white"
+          }`}
+        >
+          🔎 اكتشف
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("all")}
+          className={`rounded-full px-4 py-2 text-sm font-bold ${
+            viewMode === "all"
+              ? "bg-emerald-600 text-white"
+              : "bg-white text-slate-700 dark:bg-slate-900 dark:text-white"
+          }`}
+        >
+          الكل
+        </button>
+      </div>
+
       <div className="mt-6 space-y-6">
+        {(viewMode === "friends" || viewMode === "all") && (
         <section className="space-y-3">
           <h2 className="px-1 text-sm font-bold text-slate-700 dark:text-slate-300">
             أصدقاؤك
@@ -154,7 +192,9 @@ export default function FriendsPage() {
             </div>
           ) : null}
         </section>
+        )}
 
+        {(viewMode === "discover" || viewMode === "all") && (
         <section className="space-y-3">
           <h2 className="px-1 text-sm font-bold text-slate-700 dark:text-slate-300">
             اكتشف أشخاص
@@ -204,6 +244,7 @@ export default function FriendsPage() {
           </div>
         ))}
         </section>
+        )}
 
         {!loading && filteredUsers.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-emerald-200 bg-white/70 p-10 text-center text-slate-500 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
