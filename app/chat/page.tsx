@@ -68,17 +68,20 @@ export default function ChatIndexPage() {
             className="flex w-full items-center justify-between rounded-[24px] border border-white/70 bg-white/90 p-4 text-right shadow-[0_20px_60px_rgba(15,23,42,0.08)] transition hover:translate-y-[-1px] dark:border-slate-800 dark:bg-slate-900/90"
             type="button"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <img
                 src={item.otherUser.image || "/user.png"}
                 alt={item.otherUser.profileName || "User"}
                 className="h-12 w-12 rounded-full object-cover"
               />
-              <div>
-                <h2 className="font-bold text-slate-900 dark:text-white">
+              <div className="min-w-0">
+                <h2 className="truncate font-bold text-slate-900 dark:text-white">
                   {item.otherUser.profileName || item.otherUser.username || "User"}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                <p className="truncate text-xs text-emerald-600">
+                  @{item.otherUser.username || "unknown"}
+                </p>
+                <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">
                   {item.lastMessage}
                 </p>
               </div>
