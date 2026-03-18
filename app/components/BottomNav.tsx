@@ -9,6 +9,7 @@ const navItems = [
   { href: "/", icon: "Home", emoji: "🏠" },
   { href: "/friends", icon: "Friends", emoji: "👥" },
   { href: "/chat", icon: "Chat", emoji: "💬" },
+  { href: "/notifications", icon: "Notifications", emoji: "🔔" },
 ];
 
 export default function BottomNav() {
