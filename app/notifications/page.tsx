@@ -13,6 +13,12 @@ type Notification = {
   senderId: string;
   receiverId: string;
   postId?: string;
+  sender?: {
+    id: string;
+    username?: string;
+    profileName?: string;
+    image?: string | null;
+  };
 };
 
 export default function NotificationsPage() {
@@ -37,7 +43,9 @@ export default function NotificationsPage() {
       try {
         const { data } = await supabase
           .from("Notification")
-          .select("*")
+          .select(
+            "id, text, type, isRead, created_at, senderId, receiverId, postId, sender:User!Notification_senderId_fkey(id, username, profileName, image)"
+          )
           .eq("receiverId", user.id)
           .order("created_at", { ascending: false });
 
@@ -92,27 +100,28 @@ export default function NotificationsPage() {
             <button
               key={notif.id}
               onClick={() => router.push(`/profile/${notif.senderId}`)}
-              className={`flex flex-col gap-2 rounded-2xl border p-4 transition-all ${
+              className={`flex items-center gap-3 rounded-2xl border p-4 text-right transition-all ${
                 notif.isRead
                   ? "border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900"
                   : "border-emerald-100 bg-emerald-50/50 shadow-sm dark:border-emerald-800 dark:bg-emerald-900/10"
               }`}
               type="button"
             >
-              <p className="text-sm dark:text-white">
-                {notif.text ||
-                  (notif.type === "like"
-                    ? "Someone liked your post."
-                    : notif.type === "follow"
-                    ? "Someone started following you."
-                    : "You have a new interaction.")}
-              </p>
-              <span className="text-[10px] text-slate-400">
-                {new Date(notif.created_at).toLocaleTimeString("ar-EG", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
+              <img
+                src={notif.sender?.image || "/user.png"}
+                alt={notif.sender?.profileName || "user"}
+                className="h-11 w-11 rounded-full object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold dark:text-white">
+                  @{notif.sender?.username || "user"}
+                </p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                  {notif.type === "follow"
+                    ? "بدأ متابعتك"
+                    : notif.text || "لديك إشعار جديد"}
+                </p>
+              </div>
             </button>
           ))
         )}
