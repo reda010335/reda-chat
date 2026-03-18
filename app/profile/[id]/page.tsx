@@ -28,13 +28,21 @@ export default function ProfilePage() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [authUserId, setAuthUserId] = useState("");
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followsMe, setFollowsMe] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
     const fetchProfileData = async () => {
-      const [{ data: user }, { data: userPosts }] = await Promise.all([
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      const [{ data: user }, { data: userPosts }, { data: myFollow }, { data: reverseFollow }] = await Promise.all([
         supabase
           .from("User")
           .select("id, profileName, username, image, bio, country")
@@ -45,11 +53,30 @@ export default function ProfilePage() {
           .select("id, content, createdAt, image")
           .eq("authorId", userId)
           .order("createdAt", { ascending: false }),
+        authUser
+          ? supabase
+              .from("Follow")
+              .select("id")
+              .eq("followerId", authUser.id)
+              .eq("followingId", userId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        authUser
+          ? supabase
+              .from("Follow")
+              .select("id")
+              .eq("followerId", userId)
+              .eq("followingId", authUser.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
 
       if (isMounted) {
+        setAuthUserId(authUser?.id || "");
         setProfile((user as UserProfile) || null);
         setPosts((userPosts as Post[]) || []);
+        setIsFollowing(Boolean(myFollow));
+        setFollowsMe(Boolean(reverseFollow));
         setLoading(false);
       }
     };
@@ -64,6 +91,63 @@ export default function ProfilePage() {
   if (loading) {
     return <div className="p-10 text-center dark:text-white">Loading profile...</div>;
   }
+
+  const isMyProfile = authUserId === userId;
+
+  const handleFollowToggle = async () => {
+    if (!authUserId || isMyProfile || followLoading) return;
+    setFollowLoading(true);
+
+    try {
+      if (isFollowing) {
+        await supabase
+          .from("Follow")
+          .delete()
+          .eq("followerId", authUserId)
+          .eq("followingId", userId);
+
+        await supabase
+          .from("Friendship")
+          .delete()
+          .or(
+            `and(userId.eq.${authUserId},friendId.eq.${userId}),and(userId.eq.${userId},friendId.eq.${authUserId})`
+          );
+
+        setIsFollowing(false);
+      } else {
+        await supabase.from("Follow").insert({
+          followerId: authUserId,
+          followingId: userId,
+          createdAt: new Date().toISOString(),
+        });
+
+        if (followsMe) {
+          await supabase.from("Friendship").upsert(
+            [
+              { userId: authUserId, friendId: userId },
+              { userId, friendId: authUserId },
+            ],
+            { onConflict: "userId,friendId" }
+          );
+        }
+
+        await supabase.from("Notification").insert({
+          receiverId: userId,
+          senderId: authUserId,
+          type: "follow",
+          isRead: false,
+          created_at: new Date().toISOString(),
+        });
+
+        setIsFollowing(true);
+      }
+    } catch (error) {
+      console.error("Follow toggle error:", error);
+      alert("تعذر تنفيذ العملية الآن");
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-4 py-6" dir="rtl">
@@ -91,20 +175,46 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => router.push(`/chat/${userId}`)}
-                className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700"
-                type="button"
-              >
-                Message
-              </button>
+            <div className="flex flex-wrap gap-3">
+              {!isMyProfile ? (
+                <>
+                  <button
+                    onClick={() => router.push(`/chat/${userId}`)}
+                    className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700"
+                    type="button"
+                  >
+                    مراسلة
+                  </button>
+                  <button
+                    onClick={handleFollowToggle}
+                    disabled={followLoading}
+                    className={`rounded-full px-5 py-2.5 text-sm font-bold transition ${
+                      isFollowing
+                        ? "bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-white"
+                        : "bg-blue-600 text-white hover:bg-blue-700"
+                    }`}
+                    type="button"
+                  >
+                    {followLoading
+                      ? "..."
+                      : isFollowing
+                      ? "إلغاء المتابعة"
+                      : "متابعة"}
+                  </button>
+                  {isFollowing && followsMe ? (
+                    <span className="self-center rounded-full bg-emerald-100 px-4 py-2 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                      أنتم أصدقاء ✅
+                    </span>
+                  ) : null}
+                </>
+              ) : null}
+
               <button
                 onClick={() => router.back()}
                 className="rounded-full bg-slate-100 px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
                 type="button"
               >
-                Back
+                رجوع
               </button>
             </div>
           </div>
