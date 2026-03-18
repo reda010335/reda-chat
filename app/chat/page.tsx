@@ -37,7 +37,10 @@ export default function ChatIndexPage() {
       const data = await res.json();
 
       if (isMounted) {
-        setItems(Array.isArray(data) ? data : []);
+        const safeItems = Array.isArray(data)
+          ? data.filter((item) => item?.otherUser?.id)
+          : [];
+        setItems(safeItems);
         setLoading(false);
       }
     };
