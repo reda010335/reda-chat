@@ -37,6 +37,19 @@ export default function Stories({ supabase, user }: StoriesProps) {
 
   const fetchStories = async () => {
     try {
+      let allowedAuthorIds: string[] = [];
+      if (user?.id) {
+        const { data: friendships } = await supabase
+          .from("Friendship")
+          .select("userId, friendId")
+          .or(`userId.eq.${user.id},friendId.eq.${user.id}`);
+
+        const friendIds = (friendships || []).map((row: any) =>
+          row.userId === user.id ? row.friendId : row.userId
+        );
+        allowedAuthorIds = [user.id, ...friendIds];
+      }
+
       const { data, error } = await supabase
         .from("Story")
         .select(`
@@ -51,6 +64,7 @@ export default function Stories({ supabase, user }: StoriesProps) {
           )
         `)
         .gte("createdAt", storiesSince)
+        .in("authorId", allowedAuthorIds.length ? allowedAuthorIds : ["__no_user__"])
         .order("createdAt", { ascending: false });
 
       if (error) throw error;
