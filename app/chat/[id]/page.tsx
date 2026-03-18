@@ -22,6 +22,9 @@ type Message = {
   createdAt: string;
 };
 
+const normalizeCallType = (value?: string | null): "audio" | "video" =>
+  value === "audio" ? "audio" : "video";
+
 export default function ChatPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const router = useRouter();
@@ -140,7 +143,9 @@ export default function ChatPage() {
             );
 
             if (accepted) {
-              router.push(`/call/${msg.callId}`);
+              router.push(
+                `/call/${msg.callId}?type=${normalizeCallType(msg.type)}`
+              );
             }
           }
         }
@@ -215,7 +220,9 @@ export default function ChatPage() {
       );
 
       if (isCall && savedMessage.callId) {
-        router.push(`/call/${savedMessage.callId}`);
+        router.push(
+          `/call/${savedMessage.callId}?type=${normalizeCallType(savedMessage.type)}`
+        );
       }
     } catch (error) {
       console.error(error);
@@ -297,17 +304,29 @@ export default function ChatPage() {
                   key={msg.id}
                   className={`flex ${isMine ? "justify-start" : "justify-end"}`}
                 >
-                  <div
-                    className={`max-w-[78%] rounded-[22px] px-4 py-3 text-sm leading-7 shadow-sm ${
-                      isCall
-                        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
-                        : isMine
-                        ? "rounded-br-md bg-emerald-600 text-white"
-                        : "rounded-bl-md border border-white/70 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
-                    }`}
-                  >
-                    {msg.content}
-                  </div>
+                  {isCall && msg.callId ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/call/${msg.callId}?type=${normalizeCallType(msg.type)}`
+                        )
+                      }
+                      className="max-w-[78%] cursor-pointer rounded-[22px] bg-amber-100 px-4 py-3 text-sm leading-7 text-amber-800 shadow-sm transition hover:opacity-90 dark:bg-amber-900/30 dark:text-amber-200"
+                    >
+                      {msg.content}
+                    </button>
+                  ) : (
+                    <div
+                      className={`max-w-[78%] rounded-[22px] px-4 py-3 text-sm leading-7 shadow-sm ${
+                        isMine
+                          ? "rounded-br-md bg-emerald-600 text-white"
+                          : "rounded-bl-md border border-white/70 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  )}
                 </div>
               );
             })}
