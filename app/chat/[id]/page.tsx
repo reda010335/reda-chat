@@ -88,11 +88,15 @@ export default function ChatPage() {
           .maybeSingle(),
       ]);
 
-      const res = await fetch(
-        `/api/messages?userId=${authUser.id}&receiverId=${receiverId}`
-      );
+      const { data: msgsData } = await supabase
+        .from("Message")
+        .select("id, content, senderId, receiverId, type, mediaUrl, callId, createdAt")
+        .or(
+          `and(senderId.eq.${authUser.id},receiverId.eq.${receiverId}),and(senderId.eq.${receiverId},receiverId.eq.${authUser.id})`
+        )
+        .order("createdAt", { ascending: true });
 
-      const msgs = res.ok ? ((await res.json()) as Message[]) : [];
+      const msgs = (msgsData as Message[]) || [];
 
       if (isMounted) {
         setMe((myData as User) || null);
@@ -263,26 +267,22 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, tempMessage]);
 
     try {
-      const res = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const { data: savedMessage, error } = await supabase
+        .from("Message")
+        .insert({
           senderId: me.id,
           receiverId,
-          text: content,
+          content,
           type,
           callId: callId || null,
           mediaUrl: mediaUrl || null,
-        }),
-      });
+        })
+        .select("id, content, senderId, receiverId, type, mediaUrl, callId, createdAt")
+        .single();
 
-      if (!res.ok) {
-        throw new Error("Failed to send message");
+      if (error || !savedMessage) {
+        throw new Error(error?.message || "Failed to send message");
       }
-
-      const savedMessage = (await res.json()) as Message;
 
       setMessages((prev) =>
         prev.map((msg) => (msg.id === tempId ? savedMessage : msg))
