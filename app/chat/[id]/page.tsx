@@ -180,10 +180,21 @@ export default function ChatPage() {
   }, [me, receiverId, receiver, router, supabase]);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollRef.current?.scrollIntoView({ behavior: "auto" });
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      if (selectedPreview) {
+        URL.revokeObjectURL(selectedPreview);
+      }
+    };
+  }, [selectedPreview]);
+
   const clearSelectedMedia = () => {
+    if (selectedPreview) {
+      URL.revokeObjectURL(selectedPreview);
+    }
     setSelectedFile(null);
     setSelectedPreview(null);
     if (mediaInputRef.current) {
@@ -297,6 +308,9 @@ export default function ChatPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (selectedPreview) {
+      URL.revokeObjectURL(selectedPreview);
+    }
     setSelectedFile(file);
     setSelectedPreview(URL.createObjectURL(file));
   };
@@ -313,7 +327,6 @@ export default function ChatPage() {
       : "voice";
 
     try {
-      setSending(true);
       const mediaUrl = await uploadMedia(selectedFile);
       await sendMessage(
         mediaType as "text" | "audio" | "video" | "image" | "voice",
@@ -326,8 +339,6 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Media upload/send error", error);
       alert("فشل رفع الوسائط، حاول مرة أخرى");
-    } finally {
-      setSending(false);
     }
   };
 
@@ -377,7 +388,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden" dir="rtl">
+    <div className="fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#edf3ef]" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-white/60 bg-white/90 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <button
@@ -429,7 +440,7 @@ export default function ChatPage() {
       </header>
 
       <div className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-4 py-5">
+        <div className="flex-1 overflow-y-auto px-4 py-5 overscroll-contain">
           <div className="space-y-4">
             {messages.map((msg) => {
               const isMine = msg.senderId === me?.id;
