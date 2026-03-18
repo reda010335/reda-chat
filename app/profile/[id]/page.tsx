@@ -197,8 +197,12 @@ export default function ProfilePage() {
                   >
                     {followLoading
                       ? "..."
+                      : isFollowing && followsMe
+                      ? "أصدقاء"
                       : isFollowing
                       ? "إلغاء المتابعة"
+                      : followsMe
+                      ? "رد متابعة"
                       : "متابعة"}
                   </button>
                   {isFollowing && followsMe ? (
