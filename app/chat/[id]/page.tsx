@@ -390,18 +390,45 @@ export default function ChatPage() {
   return (
     <div className="fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#edf3ef]" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-white/60 bg-white/90 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <button
-            onClick={() => router.back()}
-            className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
-            type="button"
-          >
-            رجوع
-          </button>
+        <div className="mx-auto grid max-w-3xl grid-cols-[auto_1fr_auto] items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => startCall("audio")}
+              className="rounded-full bg-slate-100 px-3 py-2 text-lg transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
+              type="button"
+              aria-label="audio call"
+            >
+              📞
+            </button>
+            <button
+              onClick={() => startCall("video")}
+              className="rounded-full bg-slate-100 px-3 py-2 text-lg transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
+              type="button"
+              aria-label="video call"
+            >
+              📹
+            </button>
+            <button
+              onClick={() => router.back()}
+              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
+              type="button"
+            >
+              رجوع
+            </button>
+          </div>
+
+          <div className="min-w-0 text-center">
+            <h1 className="truncate text-base font-black text-slate-900 dark:text-white">
+              {receiver?.profileName || "User"}
+            </h1>
+            <p className="truncate text-xs text-emerald-600">
+              @{receiver?.username || "chat"}
+            </p>
+          </div>
 
           <button
             onClick={() => router.push(`/profile/${receiverId}`)}
-            className="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="justify-self-end rounded-full transition hover:opacity-90"
             type="button"
           >
             <img
@@ -409,33 +436,7 @@ export default function ChatPage() {
               alt={receiver?.profileName || "User"}
               className="h-11 w-11 rounded-full object-cover"
             />
-            <div className="text-right">
-              <h1 className="font-bold text-slate-900 dark:text-white">
-                {receiver?.profileName || "User"}
-              </h1>
-              <p className="text-xs text-emerald-600">
-                @{receiver?.username || "chat"}
-              </p>
-            </div>
           </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => startCall("audio")}
-              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
-              type="button"
-            >
-              ✈️
-            </button>
-
-            <button
-              onClick={() => startCall("video")}
-              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
-              type="button"
-            >
-              📹
-            </button>
-          </div>
         </div>
       </header>
 
@@ -540,7 +541,29 @@ export default function ChatPage() {
             </div>
           ) : null}
 
-          <div className="mx-auto flex max-w-3xl gap-3">
+          <div className="mx-auto flex max-w-3xl items-center gap-2">
+            <button
+              type="button"
+              onClick={() => mediaInputRef.current?.click()}
+              className="rounded-full bg-slate-100 px-3 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
+              disabled={sending}
+              aria-label="media"
+            >
+              📎
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleAudioRecording}
+              className={`rounded-full px-3 py-3 text-sm font-bold text-white transition ${
+                recording ? "bg-red-500 hover:bg-red-600" : "bg-slate-700 hover:bg-slate-800"
+              }`}
+              disabled={sending}
+              aria-label="voice"
+            >
+              {recording ? "⏹️" : "🎤"}
+            </button>
+
             <input
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
@@ -565,26 +588,6 @@ export default function ChatPage() {
               hidden
               onChange={handlePickMedia}
             />
-
-            <button
-              type="button"
-              onClick={() => mediaInputRef.current?.click()}
-              className="rounded-full bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
-              disabled={sending}
-            >
-              📎
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleAudioRecording}
-              className={`rounded-full px-4 py-3 text-sm font-bold text-white transition ${
-                recording ? "bg-red-500 hover:bg-red-600" : "bg-slate-700 hover:bg-slate-800"
-              }`}
-              disabled={sending}
-            >
-              {recording ? "⏹️" : "🎤"}
-            </button>
 
             {selectedFile ? (
               <button
