@@ -129,6 +129,20 @@ export default function ChatPage() {
 
             return [...prev, msg];
           });
+
+          if (
+            (msg.type === "audio" || msg.type === "video") &&
+            msg.senderId === receiverId &&
+            msg.callId
+          ) {
+            const accepted = window.confirm(
+              `${receiver?.profileName || "مستخدم"} يتصل بك. هل تريد الرد؟`
+            );
+
+            if (accepted) {
+              router.push(`/call/${msg.callId}`);
+            }
+          }
         }
       )
       .subscribe();
@@ -136,21 +150,31 @@ export default function ChatPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [me, receiverId, supabase]);
+  }, [me, receiverId, receiver, router, supabase]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = async () => {
-    const content = newMessage.trim();
+  const sendMessage = async (
+    type: "text" | "audio" | "video" = "text",
+    callId?: string
+  ) => {
+    const isCall = type === "audio" || type === "video";
+    const content = isCall
+      ? type === "audio"
+        ? "مكالمة صوتية"
+        : "مكالمة فيديو"
+      : newMessage.trim();
 
     if (!content || !me || !receiverId || sending) {
       return;
     }
 
     setSending(true);
-    setNewMessage("");
+    if (!isCall) {
+      setNewMessage("");
+    }
 
     const tempId = `temp-${crypto.randomUUID()}`;
     const tempMessage: Message = {
@@ -158,7 +182,8 @@ export default function ChatPage() {
       content,
       senderId: me.id,
       receiverId,
-      type: "text",
+      type,
+      callId: callId || null,
       createdAt: new Date().toISOString(),
     };
 
@@ -174,6 +199,8 @@ export default function ChatPage() {
           senderId: me.id,
           receiverId,
           text: content,
+          type,
+          callId: callId || null,
         }),
       });
 
@@ -186,19 +213,30 @@ export default function ChatPage() {
       setMessages((prev) =>
         prev.map((msg) => (msg.id === tempId ? savedMessage : msg))
       );
+
+      if (isCall && savedMessage.callId) {
+        router.push(`/call/${savedMessage.callId}`);
+      }
     } catch (error) {
       console.error(error);
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
-      setNewMessage(content);
+      if (!isCall) {
+        setNewMessage(content);
+      }
     } finally {
       setSending(false);
     }
   };
 
+  const startCall = (type: "audio" | "video") => {
+    const callId = crypto.randomUUID();
+    sendMessage(type, callId);
+  };
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden" dir="rtl">
       <header className="border-b border-white/60 bg-white/85 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/85">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <button
             onClick={() => router.back()}
             className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
@@ -226,6 +264,24 @@ export default function ChatPage() {
               </p>
             </div>
           </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => startCall("audio")}
+              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
+              type="button"
+            >
+              📞
+            </button>
+
+            <button
+              onClick={() => startCall("video")}
+              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
+              type="button"
+            >
+              📹
+            </button>
+          </div>
         </div>
       </header>
 
@@ -234,6 +290,7 @@ export default function ChatPage() {
           <div className="space-y-4">
             {messages.map((msg) => {
               const isMine = msg.senderId === me?.id;
+              const isCall = msg.type === "audio" || msg.type === "video";
 
               return (
                 <div
@@ -242,7 +299,9 @@ export default function ChatPage() {
                 >
                   <div
                     className={`max-w-[78%] rounded-[22px] px-4 py-3 text-sm leading-7 shadow-sm ${
-                      isMine
+                      isCall
+                        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+                        : isMine
                         ? "rounded-br-md bg-emerald-600 text-white"
                         : "rounded-bl-md border border-white/70 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
                     }`}
@@ -267,7 +326,7 @@ export default function ChatPage() {
               disabled={sending}
             />
             <button
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               type="button"
               disabled={sending}

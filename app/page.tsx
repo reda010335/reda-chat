@@ -21,12 +21,15 @@ type CommentItem = {
   author?: UserProfile | null;
 };
 
-type Post = {
+type RawPost = {
   id: string;
   content: string;
   createdAt: string;
   image?: string | null;
   authorId: string;
+};
+
+type Post = RawPost & {
   author?: UserProfile | null;
   likes?: { id: string; userId: string }[];
   comments?: CommentItem[];
@@ -44,45 +47,78 @@ export default function HomePage() {
   const [commentText, setCommentText] = useState("");
 
   const fetchPosts = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data: postsData, error: postsError } = await supabase
       .from("Post")
-      .select(`
-        id,
-        content,
-        createdAt,
-        image,
-        authorId,
-        author:User!Post_authorId_fkey(
-          id,
-          profileName,
-          username,
-          image
-        ),
-        likes:Like(
-          id,
-          userId
-        ),
-        comments:Comment(
-          id,
-          content,
-          createdAt,
-          authorId,
-          author:User!Comment_authorId_fkey(
-            id,
-            profileName,
-            username,
-            image
-          )
-        )
-      `)
+      .select("id, content, createdAt, image, authorId")
       .order("createdAt", { ascending: false });
 
-    if (error) {
-      console.error("Fetch posts error:", error.message);
+    if (postsError) {
+      console.error("Fetch posts error:", postsError.message);
       return;
     }
 
-    setPosts((data as Post[]) || []);
+    const postRows = (postsData as RawPost[]) || [];
+
+    const authorIds = [...new Set(postRows.map((post) => post.authorId))];
+
+    const { data: usersData } = await supabase
+      .from("User")
+      .select("id, profileName, username, image")
+      .in("id", authorIds);
+
+    const usersMap = new Map(
+      ((usersData as UserProfile[]) || []).map((item) => [item.id, item])
+    );
+
+    const { data: likesData } = await supabase
+      .from("Like")
+      .select("id, postId, userId");
+
+    const { data: commentsData } = await supabase
+      .from("Comment")
+      .select("id, content, createdAt, postId, authorId");
+
+    const commentsAuthorIds = [
+      ...new Set(((commentsData as any[]) || []).map((comment) => comment.authorId)),
+    ];
+
+    const { data: commentUsersData } = await supabase
+      .from("User")
+      .select("id, profileName, username, image")
+      .in("id", commentsAuthorIds.length ? commentsAuthorIds : [""]);
+
+    const commentUsersMap = new Map(
+      ((commentUsersData as UserProfile[]) || []).map((item) => [item.id, item])
+    );
+
+    const likesByPost = new Map<string, { id: string; userId: string }[]>();
+    ((likesData as any[]) || []).forEach((like) => {
+      const current = likesByPost.get(like.postId) || [];
+      current.push({ id: like.id, userId: like.userId });
+      likesByPost.set(like.postId, current);
+    });
+
+    const commentsByPost = new Map<string, CommentItem[]>();
+    ((commentsData as any[]) || []).forEach((comment) => {
+      const current = commentsByPost.get(comment.postId) || [];
+      current.push({
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt,
+        authorId: comment.authorId,
+        author: commentUsersMap.get(comment.authorId) || null,
+      });
+      commentsByPost.set(comment.postId, current);
+    });
+
+    const finalPosts: Post[] = postRows.map((post) => ({
+      ...post,
+      author: usersMap.get(post.authorId) || null,
+      likes: likesByPost.get(post.id) || [],
+      comments: commentsByPost.get(post.id) || [],
+    }));
+
+    setPosts(finalPosts);
   }, [supabase]);
 
   useEffect(() => {
@@ -173,47 +209,8 @@ export default function HomePage() {
 
       if (error) throw error;
 
-      const currentPostId = activePost.id;
       setCommentText("");
       await fetchPosts();
-
-      const { data } = await supabase
-        .from("Post")
-        .select(`
-          id,
-          content,
-          createdAt,
-          image,
-          authorId,
-          author:User!Post_authorId_fkey(
-            id,
-            profileName,
-            username,
-            image
-          ),
-          likes:Like(
-            id,
-            userId
-          ),
-          comments:Comment(
-            id,
-            content,
-            createdAt,
-            authorId,
-            author:User!Comment_authorId_fkey(
-              id,
-              profileName,
-              username,
-              image
-            )
-          )
-        `)
-        .eq("id", currentPostId)
-        .maybeSingle();
-
-      if (data) {
-        setActivePost(data as Post);
-      }
     } catch (err: any) {
       console.error("Comment error:", err.message);
       alert(`فشل إضافة التعليق: ${err.message}`);

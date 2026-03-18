@@ -16,6 +16,13 @@ export default function BottomNav() {
   const supabase = getSupabaseBrowserClient();
   const [profileHref, setProfileHref] = useState("/signup");
 
+  const hiddenRoutes = ["/signup"];
+  const hiddenPrefixes = ["/chat/", "/call/"];
+
+  const shouldHide =
+    hiddenRoutes.includes(pathname) ||
+    hiddenPrefixes.some((prefix) => pathname.startsWith(prefix));
+
   useEffect(() => {
     let isMounted = true;
 
@@ -36,6 +43,10 @@ export default function BottomNav() {
     };
   }, [supabase]);
 
+  if (shouldHide) {
+    return null;
+  }
+
   return (
     <nav className="fixed bottom-4 left-4 right-4 z-50 mx-auto flex max-w-2xl items-center justify-around rounded-[28px] border border-white/60 bg-white/90 px-3 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
       {navItems.map((item) => (
@@ -47,6 +58,7 @@ export default function BottomNav() {
           isActive={pathname === item.href}
         />
       ))}
+
       <NavBtn
         href={profileHref}
         icon="Profile"
