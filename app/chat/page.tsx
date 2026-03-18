@@ -13,6 +13,7 @@ type ConversationItem = {
   };
   lastMessage: string;
 };
+type UserLite = ConversationItem["otherUser"];
 
 export default function ChatIndexPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -33,13 +34,52 @@ export default function ChatIndexPage() {
         return;
       }
 
-      const res = await fetch(`/api/messages/recent?userId=${user.id}`);
-      const data = await res.json();
+      const { data: messages, error } = await supabase
+        .from("Message")
+        .select("id, content, senderId, receiverId, createdAt")
+        .or(`senderId.eq.${user.id},receiverId.eq.${user.id}`)
+        .order("createdAt", { ascending: false });
+
+      if (error) {
+        console.error("Fetch recent messages error:", error.message);
+      }
+
+      const recent = (messages || []) as Array<{
+        senderId: string;
+        receiverId: string;
+        content: string;
+      }>;
+
+      const seen = new Set<string>();
+      const summaries: Array<{ otherUserId: string; lastMessage: string }> = [];
+      for (const msg of recent) {
+        const otherUserId = msg.senderId === user.id ? msg.receiverId : msg.senderId;
+        if (!otherUserId || seen.has(otherUserId)) continue;
+        seen.add(otherUserId);
+        summaries.push({
+          otherUserId,
+          lastMessage: msg.content || "ابدأ المحادثة الآن",
+        });
+      }
+
+      const ids = summaries.map((s) => s.otherUserId);
+      const { data: usersData } = ids.length
+        ? await supabase
+            .from("User")
+            .select("id, username, profileName, image")
+            .in("id", ids)
+        : { data: [] as UserLite[] };
+
+      const usersMap = new Map((usersData || []).map((u) => [u.id, u as UserLite]));
+      const data = summaries
+        .map((summary) => ({
+          otherUser: usersMap.get(summary.otherUserId),
+          lastMessage: summary.lastMessage,
+        }))
+        .filter((item) => item.otherUser?.id);
 
       if (isMounted) {
-        const safeItems = Array.isArray(data)
-          ? data.filter((item) => item?.otherUser?.id)
-          : [];
+        const safeItems = Array.isArray(data) ? data : [];
         setItems(safeItems);
         setLoading(false);
       }
