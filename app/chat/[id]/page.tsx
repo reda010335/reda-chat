@@ -425,7 +425,7 @@ export default function ChatPage() {
               className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-white"
               type="button"
             >
-              📞
+              ✈️
             </button>
 
             <button
