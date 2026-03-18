@@ -5,11 +5,10 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
-    const receiverId = searchParams.get("receiverId");
 
-    if (!userId || !receiverId) {
+    if (!userId) {
       return NextResponse.json(
-        { error: "userId و receiverId مطلوبان" },
+        { error: "userId مطلوب" },
         { status: 400 }
       );
     }
@@ -17,16 +16,52 @@ export async function GET(req: Request) {
     const messages = await prisma.message.findMany({
       where: {
         OR: [
-          { senderId: userId, receiverId },
-          { senderId: receiverId, receiverId: userId },
+          { senderId: userId },
+          { receiverId: userId },
         ],
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            profileName: true,
+            image: true,
+          },
+        },
+        receiver: {
+          select: {
+            id: true,
+            username: true,
+            profileName: true,
+            image: true,
+          },
+        },
+      },
     });
 
-    return NextResponse.json(messages);
+    const seen = new Set<string>();
+    const conversations = [];
+
+    for (const msg of messages) {
+      const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
+
+      if (!otherUser || seen.has(otherUser.id)) {
+        continue;
+      }
+
+      seen.add(otherUser.id);
+
+      conversations.push({
+        otherUser,
+        lastMessage: msg.content || "Start the conversation now",
+      });
+    }
+
+    return NextResponse.json(conversations);
   } catch (error: any) {
-    console.error("GET /api/messages error:", error);
+    console.error("GET /api/messages/recent error:", error);
     return NextResponse.json(
       { error: error.message || "حدث خطأ أثناء جلب الرسائل" },
       { status: 500 }
