@@ -6,7 +6,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Notification = {
   id: string;
-  text: string;
+  text?: string | null;
   type: string;
   isRead: boolean;
   created_at: string;
@@ -89,13 +89,15 @@ export default function NotificationsPage() {
           </div>
         ) : (
           notifications.map((notif) => (
-            <div
+            <button
               key={notif.id}
+              onClick={() => router.push(`/profile/${notif.senderId}`)}
               className={`flex flex-col gap-2 rounded-2xl border p-4 transition-all ${
                 notif.isRead
                   ? "border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900"
                   : "border-emerald-100 bg-emerald-50/50 shadow-sm dark:border-emerald-800 dark:bg-emerald-900/10"
               }`}
+              type="button"
             >
               <p className="text-sm dark:text-white">
                 {notif.text ||
@@ -111,7 +113,7 @@ export default function NotificationsPage() {
                   minute: "2-digit",
                 })}
               </span>
-            </div>
+            </button>
           ))
         )}
       </main>
